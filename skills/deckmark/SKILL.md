@@ -9,7 +9,7 @@ deckmark is a workflow for building a slide deck *with* the user, where they rev
 
 ## When to invoke
 
-- The user typed `/use-deckmark <prompt>`.
+- The user typed `/deckmark:use-deckmark <prompt>`.
 - The user asked for a presentation, slide deck, talk, or slideshow and you have the deckmark MCP tools available.
 - The user said "address the annotations," "apply the comments," or similar after a review round.
 - The user asked to change the design ("make it darker", "switch to academic style") — call `build_deck` again with new design params; no content rewrite needed.
@@ -21,7 +21,7 @@ deckmark is a workflow for building a slide deck *with* the user, where they rev
 | `init_deck` | Once at the start of a new deck. |
 | `build_deck` | After writing or editing `content.md`, **or** when the user wants to change the design (style/mode/motion). Idempotent. |
 | `start_review` | After a build, to open the review server. |
-| `wait_for_close` | Optional — block until the user clicks Done. |
+| `wait_for_close` | **Always call this immediately after `start_review`.** Blocks until the user clicks Done in the browser, or until `timeout_seconds` elapses (default 1800 = 30 min). Without it, clicking Done in the browser doesn't reach the agent and the workflow stalls. |
 | `get_annotations` | Whenever the user says to address comments. Works even if Done was not clicked. |
 | `stop_review` | Optional — the server auto-stops 5 min after Done. |
 | `publish_deck` | After the user is satisfied. **Always ask the user `single-file` or `multi-file`** — both shapes are common, neither is "default." See "Publishing" below for what to say. |
@@ -114,7 +114,7 @@ init_deck → write content.md → build_deck(style, mode, motion)
   ↓
 start_review → [user annotates in browser]
   ↓
-wait_for_close (optional) OR user returns to chat
+wait_for_close (1800s default — returns when user clicks Done OR on timeout)
   ↓
 get_annotations → for each: locate in content.md, apply change → build_deck
   ↓
@@ -125,10 +125,29 @@ ask "publish?" → ask single-file or multi-file → publish_deck
 
 ## Hand-off conventions
 
-- After `start_review`, tell the user the URL clearly and remind them: *press A to annotate, click an element, type a comment, then Done*.
+- After `start_review`, tell the user the URL clearly, remind them *press A to annotate, click an element, type a comment, then Done*, **and** mention that they can also just send a chat message ("apply the comments", "publish it", etc.) without clicking Done — both paths work. Then immediately call `wait_for_close` in the same turn (see "Done-signal contract" below).
+- After `wait_for_close` returns (closed:true OR timed_out:true), call `get_annotations` and apply the comments.
 - After applying annotations, summarize what changed (not the whole diff). Ask if they want another round.
 - Before `publish_deck`, ask the user `single-file` vs `multi-file` — see "Publishing" below.
 - After `publish_deck`, give them the output path.
+
+## Done-signal contract: wait_for_close after start_review (both paths supported)
+
+Clicking "Done" in the overlay writes `closed: true` to the session JSON on disk. **It does not send any signal to the agent.** The agent finds out only by actively polling that file — which is exactly what `wait_for_close` does (1-second poll, returns within ~1 second of Done).
+
+So always call `wait_for_close` immediately after `start_review`, in the same turn. That gives the user the "click Done, agent picks up instantly" path.
+
+The chat path is also fully supported via Claude Code's interrupt: while `wait_for_close` is polling, the user can press **Esc** in chat to cancel the current tool call, then type a message — *"apply the comments", "publish as single file", "make slide 3 bolder", etc.* The agent then proceeds normally (calls `get_annotations`, applies, etc.).
+
+Tell the user both paths exist in your hand-off message — so they can choose without learning a workflow. Example:
+
+> Deck at http://127.0.0.1:<port>. Press `A` to annotate any element, then click ✓ Done when you're finished — I'll pick up right away. Or come back here any time and tell me what you want changed (press Esc first if I'm still waiting).
+
+Both paths land in the same place: `wait_for_close` returns, you call `get_annotations`, you apply.
+
+If `wait_for_close` returns `timed_out: true` after the default 30 minutes, the user walked away. Still call `get_annotations` — there may be partial annotations to apply, or the user may come back to chat later.
+
+Never split `start_review` and `wait_for_close` across turns; never end your turn while a review session is live without `wait_for_close` running.
 
 ## Publishing
 
@@ -145,7 +164,6 @@ Then call `publish_deck` with the chosen `mode`. Default output naming:
 - multi-file: `./published/` with entry `index.html`
 
 Override `out` only if the user explicitly asks for a different name or location.
-- If `wait_for_close` times out, just call `get_annotations` — never block the user indefinitely.
 
 ## Each iteration is a NEW review session — never reuse the old URL
 
@@ -184,5 +202,5 @@ If you cannot call `init_deck` / `build_deck` / `start_review` / `get_annotation
 When you detect missing MCP tools:
 
 1. Tell the user clearly: *"The deckmark MCP server isn't loaded in this session, so I can't run the annotation flow."*
-2. Suggest the fix: usually a plugin reinstall + Claude Code restart. If the install was recent and the cache is stale, the user may need to wipe `~/.claude/plugins/cache/deckmark-dev/` and `installed_plugins.json`'s `deckmark@deckmark-dev` entry, then reinstall.
+2. Suggest the fix: usually `/plugin marketplace update deckmark-marketplace` + `/plugin install deckmark@deckmark-marketplace` + a Claude Code restart. If the marketplace mirror is stale, wipe `~/.claude/plugins/cache/deckmark-marketplace/` and remove the `deckmark@deckmark-marketplace` entry from `~/.claude/plugins/installed_plugins.json` before reinstalling.
 3. **Stop.** Don't proceed without the tools.

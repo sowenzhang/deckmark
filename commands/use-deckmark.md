@@ -88,12 +88,12 @@ Keep it tight — one combined message. Don't bury the user under a survey.
    - `technical` — code blocks generous, terminal output, diagrams
    - `fun` — conversational tone, friendly framing, light commentary
 4. Call `build_deck` with `{ dir: "<slug>", style, mode, motion }`.
-5. Call `start_review` with `{ dir: "<slug>" }`. Tell the user something like: *"Deck at <url> — press A to annotate any element, then click Done in the browser (or come back here when ready)."*
-6. Optionally call `wait_for_close` with the `session_id` and timeout. Otherwise wait for the user to come back to chat.
+5. Call `start_review` with `{ dir: "<slug>" }`. Tell the user **both** annotation paths in one short message: *"Deck at <url> — press `A` to annotate any element, click ✓ Done when finished, and I'll pick up. Or come back here any time and tell me what to change (press Esc first if I'm still waiting)."*
+6. **Immediately call `wait_for_close`** with the returned `session_id` (default 1800 s timeout) in the same turn. Do not end your turn here — Done in the browser only reaches you while `wait_for_close` is polling. The user can press Esc to interrupt and chat directly; that's expected and supported. When `wait_for_close` returns (closed, timed out, OR interrupted), proceed to step 7.
 7. Call `get_annotations` with `{ dir: "<slug>", format: "md" }`.
 8. For each annotation, locate the matching markdown in `content.md` (use `element.text` as the fallback anchor) and apply the change. Treat the `summary` field as global guidance.
 9. Re-run `build_deck` with the same design args.
-10. **Call `start_review` again** — this creates a new session at a fresh URL. The previous review server is dead (auto-shutdown). Never tell the user to refresh the old URL.
+10. **Call `start_review` again immediately followed by `wait_for_close`** — same contract as step 5+6. The previous review server is dead (auto-shutdown). Never tell the user to refresh the old URL, and never split start_review and wait_for_close across turns.
 11. Summarize what changed and give them the **new** URL. Ask if they want another round or to publish. If they say change the look, just re-call `build_deck` with a new `style` / `mode` / `motion` and then a new `start_review`.
 12. On "publish", **ask the user which mode they want — never silently default**. Present the tradeoff in one short message:
 
@@ -109,5 +109,5 @@ Keep it tight — one combined message. Don't bury the user under a survey.
 
 - Never ask the user to take screenshots; the annotation system replaces that loop.
 - Don't change the design unilaterally — it's the user's choice. If you think a different style would suit the content better, *suggest* it; don't switch.
-- If `wait_for_close` times out, just call `get_annotations` — never block indefinitely.
+- If `wait_for_close` times out (timed_out:true), still call `get_annotations` — there may be partial annotations to apply, or the user may have come back to chat to redirect.
 - The user can pivot the entire design at any point with one prompt ("make it darker", "switch to academic"). Honor it with a single `build_deck` call.

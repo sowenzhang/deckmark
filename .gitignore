@@ -34,7 +34,7 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Dogfood artifacts — generated when running `deckmark init .` inside the repo
+# Dogfood artifacts — generated when invoking init_deck on this repo for manual testing
 # Anchored to repo root so runtime/templates/ versions are unaffected
 /AGENTS.md
 /CLAUDE.md
@@ -45,3 +45,4 @@ Thumbs.db
 
 # Deckmark runtime: PID files inside user project annotation dirs
 **/annotations/.session-*.pid
+deckmark-*.tgz
