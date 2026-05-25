@@ -67,9 +67,9 @@ async function rejectSymlink(src: string): Promise<boolean> {
 /**
  * Mirror non-internal files from the deck folder into build/ so the rendered
  * HTML can reference user assets (images, fonts, etc.) via stable relative
- * paths. Idempotent: re-running overwrites files in build/ but never deletes
- * extras (a removed asset in deckDir will still be served from build/ until
- * the next clean rebuild — acceptable for MVP).
+ * paths. Re-running overwrites matching files in build/. In the normal build
+ * flow, removed assets do not linger because `buildDeck` clears the output
+ * directory before syncing user assets.
  *
  * Symlinks are skipped at every depth (top-level entries + the `filter`
  * passed to cp()) to keep links like `images/secret -> /etc/passwd` out of
