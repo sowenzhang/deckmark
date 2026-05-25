@@ -68,7 +68,7 @@ The agent will:
 2. Ask audience and approximate length.
 3. Scaffold a project folder, write `content.md` from your brief, build the deck, and launch a local annotation server at `http://127.0.0.1:<port>`.
 4. Tell you the URL. You open it. Press `A` to enter annotation mode, click any slide element, type a comment, repeat. Click ✓ Done when finished.
-5. Come back to the chat. Say *"apply the comments"* (or anything similar). The agent reads your structured feedback, edits `content.md`, and rebuilds. You can iterate as many rounds as you like.
+5. After you click Done, the agent reads your structured feedback, edits `content.md`, and rebuilds. (If you return later, you can still say “apply the comments”.)
 6. When the deck is final, ask the agent to publish. It'll offer two options: a single self-contained `.html` (good for email/USB/attachment), or a `published/` folder with `index.html` + cacheable assets (good for hosting on GitHub Pages, Netlify, S3, etc.).
 
 ---
