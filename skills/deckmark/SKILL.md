@@ -21,7 +21,7 @@ deckmark is a workflow for building a slide deck *with* the user, where they rev
 | `init_deck` | Once at the start of a new deck. |
 | `build_deck` | After writing or editing `content.md`, **or** when the user wants to change the design (style/mode/motion). Idempotent. |
 | `start_review` | After a build, to open the review server. |
-| `wait_for_close` | Optional — block until the user clicks Done. |
+| `wait_for_close` | **Always call this immediately after `start_review`.** Blocks until the user clicks Done in the browser, or until `timeout_seconds` elapses (default 1800 = 30 min). Without it, clicking Done in the browser doesn't reach the agent and the workflow stalls. |
 | `get_annotations` | Whenever the user says to address comments. Works even if Done was not clicked. |
 | `stop_review` | Optional — the server auto-stops 5 min after Done. |
 | `publish_deck` | After the user is satisfied. **Always ask the user `single-file` or `multi-file`** — both shapes are common, neither is "default." See "Publishing" below for what to say. |
@@ -114,7 +114,7 @@ init_deck → write content.md → build_deck(style, mode, motion)
   ↓
 start_review → [user annotates in browser]
   ↓
-wait_for_close (optional) OR user returns to chat
+wait_for_close (1800s default — returns when user clicks Done OR on timeout)
   ↓
 get_annotations → for each: locate in content.md, apply change → build_deck
   ↓
@@ -125,10 +125,27 @@ ask "publish?" → ask single-file or multi-file → publish_deck
 
 ## Hand-off conventions
 
-- After `start_review`, tell the user the URL clearly and remind them: *press A to annotate, click an element, type a comment, then Done*.
+- After `start_review`, tell the user the URL clearly, remind them *press A to annotate, click an element, type a comment, then Done*, **and immediately call `wait_for_close`** in the same turn. Do not return control to chat between these — the Done click only reaches you if `wait_for_close` is actively polling.
+- After `wait_for_close` returns (closed:true or timed_out:true), call `get_annotations` and apply the comments.
 - After applying annotations, summarize what changed (not the whole diff). Ask if they want another round.
 - Before `publish_deck`, ask the user `single-file` vs `multi-file` — see "Publishing" below.
 - After `publish_deck`, give them the output path.
+
+## Done-signal contract: always wait_for_close after start_review
+
+Clicking "Done" in the overlay writes `closed: true` to the session JSON on disk. **It does not send any signal to the agent.** The agent finds out only by actively polling that file — which is exactly what `wait_for_close` does (1-second poll, returns within ~1 second of Done).
+
+If you call `start_review` and then return control to chat without `wait_for_close`, the user clicks Done expecting you to react, and nothing happens. They have to send a chat message to wake you up. That is a bad UX and the case this contract prevents.
+
+The right shape every iteration:
+
+```
+start_review → tell user URL → wait_for_close (1800s timeout)
+  ↓ returns
+get_annotations → apply changes → build_deck → next start_review → wait_for_close …
+```
+
+`wait_for_close`'s default 1800 s (30 min) is intentionally generous. If the user walks away, it returns `timed_out: true` and you proceed by calling `get_annotations` anyway (there may be partial annotations to apply). Never split `start_review` and `wait_for_close` across turns; never end your turn while a review session is live without `wait_for_close` running.
 
 ## Publishing
 
@@ -145,7 +162,6 @@ Then call `publish_deck` with the chosen `mode`. Default output naming:
 - multi-file: `./published/` with entry `index.html`
 
 Override `out` only if the user explicitly asks for a different name or location.
-- If `wait_for_close` times out, just call `get_annotations` — never block the user indefinitely.
 
 ## Each iteration is a NEW review session — never reuse the old URL
 
