@@ -1,6 +1,11 @@
 {
   "deckmark": {
     "command": "npx",
-    "args": ["-y", "https://github.com/sowenzhang/deckmark/releases/latest/download/deckmark.tgz"]
+    "args": [
+      "-y",
+      "--package",
+      "https://github.com/sowenzhang/deckmark/releases/latest/download/deckmark.tgz",
+      "deckmark-mcp"
+    ]
   }
 }
