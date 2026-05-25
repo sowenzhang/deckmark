@@ -75,6 +75,40 @@ test('buildDeck refuses to clean an outDir that contains the deck source', async
   await rm(dir, { recursive: true });
 });
 
+test('buildDeck refuses to clean a non-empty outDir without the .deckmark-build marker', async () => {
+  const { mkdir, writeFile: w } = await import('node:fs/promises');
+  const { existsSync } = await import('node:fs');
+  const dir = await tmpDir();
+  await writeFile(join(dir, 'content.md'), SAMPLE_CONTENT);
+  // Pretend outDir is a user-owned folder with existing data — no marker.
+  const outDir = join(dir, 'random-user-folder');
+  await mkdir(outDir, { recursive: true });
+  await w(join(outDir, 'family-photo.jpg'), 'JPEG_BYTES');
+  await w(join(outDir, 'taxes.pdf'), 'PDF_BYTES');
+  await assert.rejects(
+    () => buildDeck({ contentPath: join(dir, 'content.md'), outDir }),
+    /no \.deckmark-build marker/i
+  );
+  // Pre-existing user data survived.
+  assert.ok(existsSync(join(outDir, 'family-photo.jpg')));
+  assert.ok(existsSync(join(outDir, 'taxes.pdf')));
+  await rm(dir, { recursive: true });
+});
+
+test('buildDeck cleans an outDir on repeated builds (marker round-trip)', async () => {
+  const { existsSync } = await import('node:fs');
+  const dir = await tmpDir();
+  await writeFile(join(dir, 'content.md'), SAMPLE_CONTENT);
+  // First build: outDir doesn't exist → succeeds, drops marker.
+  await buildDeck({ contentPath: join(dir, 'content.md'), outDir: join(dir, 'build') });
+  assert.ok(existsSync(join(dir, 'build', '.deckmark-build')));
+  // Second build: outDir exists with marker → rm + rebuild → succeeds.
+  await buildDeck({ contentPath: join(dir, 'content.md'), outDir: join(dir, 'build') });
+  assert.ok(existsSync(join(dir, 'build', '.deckmark-build')));
+  assert.ok(existsSync(join(dir, 'build', 'index.html')));
+  await rm(dir, { recursive: true });
+});
+
 test('buildDeck refuses to clean filesystem root', async () => {
   const dir = await tmpDir();
   await writeFile(join(dir, 'content.md'), SAMPLE_CONTENT);
@@ -234,6 +268,9 @@ test('buildDeck removes stale symlinks left in build/ from a prior build', async
   const { existsSync } = await import('node:fs');
   const dir = await tmpDir();
   await mkdir(join(dir, 'build', 'images'), { recursive: true });
+  // Marker tells buildDeck "this dir is yours to clean" — simulates the
+  // state left behind by a previous successful build.
+  await w(join(dir, 'build', '.deckmark-build'), '');
   const outsideTarget = join(dir, '..', `stale-${basename(dir)}.txt`);
   await w(outsideTarget, 'STALE_SECRET');
   try {

@@ -240,13 +240,18 @@ ${sections.join('\n')}
 </html>`;
 
   // Clean the build dir before each build so stale entries (especially any
-  // pre-existing symlinks) can't survive a rebuild and remain reachable
-  // through the static server. Because `rm({ recursive: true })` is
-  // destructive, refuse pathological outDir values before invoking it:
-  //   - a filesystem root (e.g. '/' or 'C:\\') — wiping the drive
-  //   - any dir that contains opts.contentPath — wiping the deck source
-  // Together these guards make accidental misuse fail loudly instead of
-  // deleting data.
+  // pre-existing symlinks) can't survive a rebuild. Because rm() is
+  // destructive, we ratchet through a layered guard:
+  //
+  //   (a) filesystem root → throw (would wipe a drive)
+  //   (b) outDir contains the deck source → throw (would wipe content.md)
+  //   (c) outDir exists, is non-empty, has no .deckmark-build marker → throw
+  //       (it's a user-owned dir; refusing to clean prevents catastrophic
+  //       data loss if outDir is mis-specified, e.g. pointed at ~/Documents)
+  //
+  // First-build flow: outDir doesn't exist OR is empty → skip rm, mkdir,
+  // drop marker. Subsequent builds find the marker (we wrote it last time)
+  // and can rm safely.
   const resolvedOutDir = resolve(opts.outDir);
   const resolvedContent = resolve(opts.contentPath);
   if (dirname(resolvedOutDir) === resolvedOutDir) {
@@ -260,8 +265,30 @@ ${sections.join('\n')}
       `buildDeck: refusing to clean outDir ${resolvedOutDir} — it contains the deck source ${resolvedContent}`
     );
   }
-  await rm(opts.outDir, { recursive: true, force: true });
+  const markerPath = join(opts.outDir, '.deckmark-build');
+  let existingEntries: string[] | null = null;
+  try {
+    existingEntries = await readdir(opts.outDir);
+  } catch (err: unknown) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code !== 'ENOENT') throw err;
+    // ENOENT → outDir doesn't exist yet; we'll create it below.
+  }
+  if (existingEntries !== null && existingEntries.length > 0) {
+    const hasMarker = existingEntries.includes('.deckmark-build');
+    if (!hasMarker) {
+      throw new Error(
+        `buildDeck: refusing to clean ${resolvedOutDir} — directory is non-empty ` +
+        `and has no .deckmark-build marker, so it doesn't look like a deckmark ` +
+        `build output. Pass an empty dir or one previously built by deckmark.`
+      );
+    }
+    await rm(opts.outDir, { recursive: true, force: true });
+  }
   await mkdir(opts.outDir, { recursive: true });
+  // Drop the marker first so an interrupted build still leaves the dir
+  // recognizable on next run.
+  await writeFile(markerPath, '');
   // Mirror user assets (images/, fonts/, etc.) from the deck folder into
   // build/ before writing index.html, so the rendered deck can reference
   // them via relative paths and so publish_deck (which reads from build/)

@@ -1,6 +1,6 @@
 // runtime/publish/multi-file.ts
 import { mkdir, cp, lstat } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, basename } from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -23,6 +23,16 @@ async function rejectSymlink(src: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * cp() filter for buildDir → outDir: rejects symlinks AND the internal
+ * .deckmark-build marker so the published folder doesn't ship deckmark's
+ * "this dir is ours to clean" signal.
+ */
+async function rejectSymlinkAndMarker(src: string): Promise<boolean> {
+  if (basename(src) === '.deckmark-build') return false;
+  return rejectSymlink(src);
 }
 
 /**
@@ -59,7 +69,7 @@ export async function multiFile(opts: MultiFileOpts): Promise<{ outDir: string; 
   // official reveal.js dist LAST. Whatever path collisions exist,
   // /vendor/reveal/* always reflects the real reveal.js — never user
   // content masquerading under the same path.
-  await cp(opts.buildDir, opts.outDir, { recursive: true, force: true, filter: rejectSymlink });
+  await cp(opts.buildDir, opts.outDir, { recursive: true, force: true, filter: rejectSymlinkAndMarker });
 
   // After the buildDir copy, the reveal dist is overlaid at <outDir>/vendor/reveal/.
   // If buildDir happened to contain a *file* (not a directory) at either
