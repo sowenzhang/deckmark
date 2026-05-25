@@ -267,7 +267,7 @@
   transform: translateY(0);
 }
 
-/* Honor user's OS-level "Reduce motion" setting for every overlay element. */
+/* Honor user's OS-level "Reduce motion" setting for overlay elements that use transitions/animations. */
 @media (prefers-reduced-motion: reduce) {
   .deckmark-toast,
   .deckmark-hover-outline,
