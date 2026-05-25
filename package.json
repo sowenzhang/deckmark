@@ -30,7 +30,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@fastify/static": "^7.0.4",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "fastify": "^4.28.0",
     "marked": "^13.0.0",
