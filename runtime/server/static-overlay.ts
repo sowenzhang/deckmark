@@ -2,10 +2,12 @@ import { readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve, normalize, dirname, sep, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import type { FastifyInstance } from 'fastify';
 import type { ServerOpts } from './factory.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 function findPackageRoot(start: string): string {
   let cur = start;
@@ -19,7 +21,11 @@ function findPackageRoot(start: string): string {
 const PKG_ROOT = findPackageRoot(__dirname);
 const OVERLAY_BUNDLE = resolve(PKG_ROOT, 'dist', 'overlay', 'overlay.js');
 const OVERLAY_STYLES = resolve(PKG_ROOT, 'dist', 'overlay', 'styles.css');
-const REVEAL_ROOT = resolve(PKG_ROOT, 'node_modules', 'reveal.js', 'dist');
+// Use Node's module resolver instead of a hardcoded path: reveal.js may be
+// inside deckmark's own node_modules (local dev / nested install) OR hoisted
+// to the parent node_modules (npx-extracted tarball / npm workspace).
+// require.resolve finds it wherever npm actually placed it.
+const REVEAL_ROOT = dirname(require.resolve('reveal.js/dist/reveal.js'));
 
 const INJECTED_SCRIPT = '<script src="/overlay/overlay.js"></script>';
 

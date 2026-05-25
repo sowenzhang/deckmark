@@ -1,26 +1,20 @@
 // runtime/publish/inline-html.ts
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, dirname, join, extname } from 'node:path';
+import { resolve, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 
 function dbg(msg: string): void {
   process.stderr.write(`[deckmark/inline] ${new Date().toISOString()} ${msg}\n`);
 }
 
-function findPackageRoot(start: string): string {
-  let cur = start;
-  while (cur !== dirname(cur)) {
-    if (existsSync(join(cur, 'package.json'))) return cur;
-    cur = dirname(cur);
-  }
-  throw new Error('package root not found');
-}
-
-const PKG_ROOT = findPackageRoot(__dirname);
-const REVEAL_DIST = resolve(PKG_ROOT, 'node_modules', 'reveal.js', 'dist');
+// Use Node's module resolver — reveal.js may be hoisted to a parent
+// node_modules when deckmark is installed via npx. See static-overlay.ts.
+const REVEAL_DIST = dirname(require.resolve('reveal.js/dist/reveal.js'));
 
 function mimeFor(ext: string): string {
   switch (ext.toLowerCase()) {
