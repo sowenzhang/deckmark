@@ -29,8 +29,8 @@ export function mountToolbar(root: HTMLElement, onDone: () => void): void {
     const count = (s.session?.annotations ?? []).filter(
       a => a.slide.index === s.currentSlideIndex
     ).length;
-    const countEl = bar.querySelector('[data-count]') as HTMLElement;
-    const valueEl = countEl.querySelector('[data-count-value]') as HTMLElement;
+    const countEl = bar.querySelector('[data-count]')!;
+    const valueEl = countEl.querySelector('[data-count-value]')!;
     valueEl.textContent = String(count);
     countEl.setAttribute('aria-label', `Annotations on current slide: ${count}`);
   });
