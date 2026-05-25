@@ -19,7 +19,8 @@
   "scripts": {
     "build:src": "tsc -p tsconfig.json && node -e \"import('fs/promises').then(async fs => { await fs.cp('runtime/templates', 'dist/runtime/templates', { recursive: true }); await fs.cp('runtime/engines/themes', 'dist/runtime/engines/themes', { recursive: true }); console.log('templates + themes copied'); })\"",
     "build:overlay": "node esbuild.overlay.mjs",
-    "build": "npm run build:src && npm run build:overlay",
+    "typecheck:overlay": "tsc -p tsconfig.overlay.json",
+    "build": "npm run build:src && npm run typecheck:overlay && npm run build:overlay",
     "test": "node --import tsx --test --test-reporter=spec \"test/**/*.test.ts\"",
     "test:unit": "node --import tsx --test --test-reporter=spec \"test/unit/**/*.test.ts\"",
     "test:integration": "node --import tsx --test --test-reporter=spec \"test/integration/**/*.test.ts\"",
