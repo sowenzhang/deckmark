@@ -9,7 +9,7 @@ deckmark is a workflow for building a slide deck *with* the user, where they rev
 
 ## When to invoke
 
-- The user typed `/use-deckmark <prompt>`.
+- The user typed `/deckmark:use-deckmark <prompt>`.
 - The user asked for a presentation, slide deck, talk, or slideshow and you have the deckmark MCP tools available.
 - The user said "address the annotations," "apply the comments," or similar after a review round.
 - The user asked to change the design ("make it darker", "switch to academic style") — call `build_deck` again with new design params; no content rewrite needed.
@@ -202,5 +202,5 @@ If you cannot call `init_deck` / `build_deck` / `start_review` / `get_annotation
 When you detect missing MCP tools:
 
 1. Tell the user clearly: *"The deckmark MCP server isn't loaded in this session, so I can't run the annotation flow."*
-2. Suggest the fix: usually a plugin reinstall + Claude Code restart. If the install was recent and the cache is stale, the user may need to wipe `~/.claude/plugins/cache/deckmark-dev/` and `installed_plugins.json`'s `deckmark@deckmark-dev` entry, then reinstall.
+2. Suggest the fix: usually `/plugin marketplace update deckmark-marketplace` + `/plugin install deckmark@deckmark-marketplace` + a Claude Code restart. If the marketplace mirror is stale, wipe `~/.claude/plugins/cache/deckmark-marketplace/` and remove the `deckmark@deckmark-marketplace` entry from `~/.claude/plugins/installed_plugins.json` before reinstalling.
 3. **Stop.** Don't proceed without the tools.
