@@ -88,8 +88,8 @@ Keep it tight — one combined message. Don't bury the user under a survey.
    - `technical` — code blocks generous, terminal output, diagrams
    - `fun` — conversational tone, friendly framing, light commentary
 4. Call `build_deck` with `{ dir: "<slug>", style, mode, motion }`.
-5. Call `start_review` with `{ dir: "<slug>" }`. Tell the user something like: *"Deck at <url> — press A to annotate any element, then click Done in the browser."*
-6. **Immediately call `wait_for_close`** with the returned `session_id` (default 1800 s timeout) in the same turn. Do not end your turn here — Done in the browser only reaches you while `wait_for_close` is polling. When it returns (closed or timed out), proceed to step 7.
+5. Call `start_review` with `{ dir: "<slug>" }`. Tell the user **both** annotation paths in one short message: *"Deck at <url> — press `A` to annotate any element, click ✓ Done when finished, and I'll pick up. Or come back here any time and tell me what to change (press Esc first if I'm still waiting)."*
+6. **Immediately call `wait_for_close`** with the returned `session_id` (default 1800 s timeout) in the same turn. Do not end your turn here — Done in the browser only reaches you while `wait_for_close` is polling. The user can press Esc to interrupt and chat directly; that's expected and supported. When `wait_for_close` returns (closed, timed out, OR interrupted), proceed to step 7.
 7. Call `get_annotations` with `{ dir: "<slug>", format: "md" }`.
 8. For each annotation, locate the matching markdown in `content.md` (use `element.text` as the fallback anchor) and apply the change. Treat the `summary` field as global guidance.
 9. Re-run `build_deck` with the same design args.

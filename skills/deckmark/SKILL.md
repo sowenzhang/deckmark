@@ -125,27 +125,29 @@ ask "publish?" → ask single-file or multi-file → publish_deck
 
 ## Hand-off conventions
 
-- After `start_review`, tell the user the URL clearly, remind them *press A to annotate, click an element, type a comment, then Done*, **and immediately call `wait_for_close`** in the same turn. Do not return control to chat between these — the Done click only reaches you if `wait_for_close` is actively polling.
-- After `wait_for_close` returns (closed:true or timed_out:true), call `get_annotations` and apply the comments.
+- After `start_review`, tell the user the URL clearly, remind them *press A to annotate, click an element, type a comment, then Done*, **and** mention that they can also just send a chat message ("apply the comments", "publish it", etc.) without clicking Done — both paths work. Then immediately call `wait_for_close` in the same turn (see "Done-signal contract" below).
+- After `wait_for_close` returns (closed:true OR timed_out:true), call `get_annotations` and apply the comments.
 - After applying annotations, summarize what changed (not the whole diff). Ask if they want another round.
 - Before `publish_deck`, ask the user `single-file` vs `multi-file` — see "Publishing" below.
 - After `publish_deck`, give them the output path.
 
-## Done-signal contract: always wait_for_close after start_review
+## Done-signal contract: wait_for_close after start_review (both paths supported)
 
 Clicking "Done" in the overlay writes `closed: true` to the session JSON on disk. **It does not send any signal to the agent.** The agent finds out only by actively polling that file — which is exactly what `wait_for_close` does (1-second poll, returns within ~1 second of Done).
 
-If you call `start_review` and then return control to chat without `wait_for_close`, the user clicks Done expecting you to react, and nothing happens. They have to send a chat message to wake you up. That is a bad UX and the case this contract prevents.
+So always call `wait_for_close` immediately after `start_review`, in the same turn. That gives the user the "click Done, agent picks up instantly" path.
 
-The right shape every iteration:
+The chat path is also fully supported via Claude Code's interrupt: while `wait_for_close` is polling, the user can press **Esc** in chat to cancel the current tool call, then type a message — *"apply the comments", "publish as single file", "make slide 3 bolder", etc.* The agent then proceeds normally (calls `get_annotations`, applies, etc.).
 
-```
-start_review → tell user URL → wait_for_close (1800s timeout)
-  ↓ returns
-get_annotations → apply changes → build_deck → next start_review → wait_for_close …
-```
+Tell the user both paths exist in your hand-off message — so they can choose without learning a workflow. Example:
 
-`wait_for_close`'s default 1800 s (30 min) is intentionally generous. If the user walks away, it returns `timed_out: true` and you proceed by calling `get_annotations` anyway (there may be partial annotations to apply). Never split `start_review` and `wait_for_close` across turns; never end your turn while a review session is live without `wait_for_close` running.
+> Deck at http://127.0.0.1:<port>. Press `A` to annotate any element, then click ✓ Done when you're finished — I'll pick up right away. Or come back here any time and tell me what you want changed (press Esc first if I'm still waiting).
+
+Both paths land in the same place: `wait_for_close` returns, you call `get_annotations`, you apply.
+
+If `wait_for_close` returns `timed_out: true` after the default 30 minutes, the user walked away. Still call `get_annotations` — there may be partial annotations to apply, or the user may come back to chat later.
+
+Never split `start_review` and `wait_for_close` across turns; never end your turn while a review session is live without `wait_for_close` running.
 
 ## Publishing
 

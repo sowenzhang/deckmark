@@ -1,10 +1,8 @@
 // runtime/publish/multi-file.ts
 import { mkdir, cp } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 // Use Node's module resolver — reveal.js may be hoisted to a parent

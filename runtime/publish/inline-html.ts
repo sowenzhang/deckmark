@@ -1,11 +1,9 @@
 // runtime/publish/inline-html.ts
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname, extname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 function dbg(msg: string): void {
