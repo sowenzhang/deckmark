@@ -1,8 +1,8 @@
 {
-  "name": "deckmark-dev",
-  "description": "Local development marketplace for the deckmark plugin",
+  "name": "deckmark-marketplace",
+  "description": "deckmark — in-browser annotation for AI-generated presentations",
   "owner": {
-    "name": "Hong Zhang",
+    "name": "sowenzhang",
     "url": "https://github.com/sowenzhang"
   },
   "plugins": [
@@ -12,7 +12,7 @@
       "version": "1.0.0",
       "source": "./",
       "author": {
-        "name": "Hong Zhang",
+        "name": "sowenzhang",
         "url": "https://github.com/sowenzhang"
       },
       "homepage": "https://github.com/sowenzhang/deckmark",

@@ -83,7 +83,7 @@ html, body { background: var(--dm-bg); color: var(--dm-fg); }
 .reveal ol li::marker { color: var(--dm-accent); font-family: 'Fraunces', serif; font-style: italic; font-weight: 600; }
 
 .reveal code {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
   font-size: 0.78em; background: var(--dm-accent-soft); color: var(--dm-accent);
   padding: 0.14em 0.42em; border-radius: 3px;
 }
@@ -125,3 +125,8 @@ html, body { background: var(--dm-bg); color: var(--dm-fg); }
 .reveal .progress { color: var(--dm-accent); height: 2px; }
 .reveal .controls { color: var(--dm-muted); opacity: 0.45; }
 .reveal .fragment { transition: all 320ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Honor OS-level 'Reduce motion' for reveal transitions + fragment animations. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal *, .reveal *::before, .reveal *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

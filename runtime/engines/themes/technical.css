@@ -30,7 +30,7 @@
 
 html, body { background: var(--dm-bg); color: var(--dm-fg); }
 .reveal {
-  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', system-ui, Roboto, sans-serif;
   color: var(--dm-fg); font-size: 28px;
   letter-spacing: -0.005em; -webkit-font-smoothing: antialiased;
   background: var(--dm-bg);
@@ -48,7 +48,7 @@ html, body { background: var(--dm-bg); color: var(--dm-fg); }
 .reveal h1 { font-size: 2.6em; font-weight: 800; }
 .reveal h2 { font-size: 2em; }
 .reveal h3 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
   font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.18em;
   color: var(--dm-accent); font-weight: 500; margin-bottom: 1.2em;
 }
@@ -67,7 +67,7 @@ html, body { background: var(--dm-bg); color: var(--dm-fg); }
 }
 .reveal section:has(> h1:first-child + p:last-child) p {
   font-size: 1.15em; color: var(--dm-muted); max-width: 26em;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 }
 
 .reveal p, .reveal li { line-height: 1.55; margin: 0 0 0.5em; }
@@ -86,11 +86,11 @@ html, body { background: var(--dm-bg); color: var(--dm-fg); }
 }
 .reveal ol li::before {
   content: counter(dm-li); position: absolute; left: 0; top: 0;
-  color: var(--dm-accent); font-family: 'JetBrains Mono', monospace; font-weight: 700;
+  color: var(--dm-accent); font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace; font-weight: 700;
 }
 
 .reveal code {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
   font-size: 0.85em; background: var(--dm-accent-soft); color: var(--dm-accent);
   padding: 0.14em 0.42em; border-radius: 4px;
   border: 1px solid color-mix(in srgb, var(--dm-accent) 25%, transparent);
@@ -115,7 +115,7 @@ html, body { background: var(--dm-bg); color: var(--dm-fg); }
 .reveal a { color: var(--dm-accent); text-decoration: none; border-bottom: 1px dashed currentColor; }
 
 .reveal blockquote {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
   font-size: 0.9em; line-height: 1.6; color: var(--dm-muted);
   border: none; border-left: 2px solid var(--dm-accent);
   padding: 0.3em 0 0.3em 1em;
@@ -126,7 +126,7 @@ html, body { background: var(--dm-bg); color: var(--dm-fg); }
 
 .reveal table {
   border-collapse: collapse; margin: 0.6em 0; font-size: 0.82em;
-  font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 }
 .reveal th {
   text-align: left; font-weight: 500;
@@ -140,3 +140,8 @@ html, body { background: var(--dm-bg); color: var(--dm-fg); }
 .reveal .progress { color: var(--dm-accent); height: 2px; }
 .reveal .controls { color: var(--dm-accent); opacity: 0.5; }
 .reveal .fragment { transition: all 280ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Honor OS-level 'Reduce motion' for reveal transitions + fragment animations. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal *, .reveal *::before, .reveal *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

@@ -80,7 +80,7 @@ State lives in `./annotations/session-<timestamp>.json` next to your deck. Write
 
 ## Architecture
 
-Single Node 20+ package, TypeScript ESM. Three layers:
+Single Node 22+ package, TypeScript ESM. Three layers:
 
 - `runtime/` — engine (reveal.js adapter), Fastify review server with overlay script injection, atomic session store, sha256 build hash, browser overlay (vanilla TS bundled via esbuild), publish emitters (inline + multi-file), and project templates.
 - `mcp/` — stdio MCP server that exposes the seven tools by calling into the runtime modules.
@@ -98,6 +98,16 @@ npm run test:unit
 npm run test:integration
 npm run mcp          # run the MCP server over stdio (for debugging)
 ```
+
+## Privacy & trust model
+
+deckmark runs entirely on your machine. The annotation server binds to `127.0.0.1` only, annotations are JSON files in your project folder, and no telemetry is sent anywhere.
+
+**One exception:** the built-in themes load typefaces from Google Fonts (Inter, Fraunces, Source Serif 4, Space Grotesk, JetBrains Mono, IBM Plex Mono, Outfit — all OFL-licensed). When you or someone you've shared the deck with opens it in a browser, that browser fetches CSS and woff2 files from `fonts.googleapis.com` / `fonts.gstatic.com`. Google sees the requesting IP, User-Agent, and (since these are font files) a low-cardinality fingerprint. Every theme also declares a robust local font fallback stack (system-ui / Inter-equivalents) so if the user is offline or has Google Fonts blocked, the deck still renders — just with system fonts.
+
+A future minor release will add a `loadFonts: false` build option to skip the `@import` lines entirely and rely purely on the system fallback chain, plus an opt-in to bundle the woff2 files into the published artifact.
+
+**Trust model for `content.md`:** the markdown source you feed to `build_deck` is treated as trusted code. `marked` passes raw HTML through unchanged, so anything in `content.md` (including `<script>` tags) ends up in the rendered deck and can call the local server's API. Treat your `content.md` like source code: don't paste in untrusted markdown, and don't review a deck whose `content.md` came from an unknown source.
 
 ## License
 

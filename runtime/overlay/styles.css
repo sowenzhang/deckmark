@@ -266,3 +266,16 @@
   opacity: 1;
   transform: translateY(0);
 }
+
+/* Honor user's OS-level "Reduce motion" setting for overlay elements that use transitions/animations. */
+@media (prefers-reduced-motion: reduce) {
+  .deckmark-toast,
+  .deckmark-hover-outline,
+  .deckmark-pin,
+  .deckmark-popover,
+  .deckmark-done-dialog,
+  .deckmark-help-dialog {
+    transition: none !important;
+    animation: none !important;
+  }
+}
