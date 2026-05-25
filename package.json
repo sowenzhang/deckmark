@@ -1,0 +1,46 @@
+{
+  "name": "deckmark",
+  "version": "1.0.0",
+  "description": "In-browser annotation for AI-generated presentations",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:sowenzhang/deckmark",
+  "files": [
+    "dist/",
+    "runtime/templates/",
+    "runtime/overlay/styles.css",
+    "commands/",
+    "skills/",
+    ".claude-plugin/",
+    ".mcp.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:src": "tsc -p tsconfig.json && node -e \"import('fs/promises').then(async fs => { await fs.cp('runtime/templates', 'dist/runtime/templates', { recursive: true }); await fs.cp('runtime/engines/themes', 'dist/runtime/engines/themes', { recursive: true }); console.log('templates + themes copied'); })\"",
+    "build:overlay": "node esbuild.overlay.mjs",
+    "build": "npm run build:src && npm run build:overlay",
+    "test": "node --import tsx --test --test-reporter=spec \"test/**/*.test.ts\"",
+    "test:unit": "node --import tsx --test --test-reporter=spec \"test/unit/**/*.test.ts\"",
+    "test:integration": "node --import tsx --test --test-reporter=spec \"test/integration/**/*.test.ts\"",
+    "mcp": "node --import tsx mcp/server.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fastify/static": "^7.0.4",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "fastify": "^4.28.0",
+    "marked": "^13.0.0",
+    "reveal.js": "^5.1.0",
+    "unique-selector": "^0.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "esbuild": "^0.23.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "undici": "^6.19.0"
+  }
+}

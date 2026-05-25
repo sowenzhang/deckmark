@@ -1,0 +1,22 @@
+{
+  "name": "deckmark-dev",
+  "description": "Local development marketplace for the deckmark plugin",
+  "owner": {
+    "name": "Hong Zhang",
+    "url": "https://github.com/sowenzhang"
+  },
+  "plugins": [
+    {
+      "name": "deckmark",
+      "description": "In-browser annotation for AI-generated presentations. Build a deck with your agent, click directly on elements to leave change requests, and the agent applies them — no screenshots, no back-and-forth.",
+      "version": "1.0.0",
+      "source": "./",
+      "author": {
+        "name": "Hong Zhang",
+        "url": "https://github.com/sowenzhang"
+      },
+      "homepage": "https://github.com/sowenzhang/deckmark",
+      "license": "MIT"
+    }
+  ]
+}
