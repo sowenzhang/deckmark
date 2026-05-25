@@ -45,3 +45,4 @@ Thumbs.db
 
 # Deckmark runtime: PID files inside user project annotation dirs
 **/annotations/.session-*.pid
+deckmark-*.tgz
