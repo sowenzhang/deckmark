@@ -120,6 +120,44 @@ test('buildDeck mirrors user assets (images/) from deck folder into build/', asy
   await rm(dir, { recursive: true });
 });
 
+test('buildDeck skips nested symlinks during asset sync (security: no /etc/passwd via images/secret)', async () => {
+  // Symlink creation on Windows usually requires either admin rights or
+  // Developer Mode. If symlink() fails with EPERM we skip — the test is a
+  // security regression check, not a portability test.
+  const { mkdir, writeFile: w, symlink } = await import('node:fs/promises');
+  const { existsSync, lstatSync } = await import('node:fs');
+  const dir = await tmpDir();
+  await mkdir(join(dir, 'images'), { recursive: true });
+  await w(join(dir, 'images', 'real.jpg'), 'jpeg-bytes');
+  // Drop a target file outside the deck and try to symlink to it from inside.
+  const outsideTarget = join(dir, '..', 'sensitive.txt');
+  await w(outsideTarget, 'SECRET');
+  try {
+    await symlink(outsideTarget, join(dir, 'images', 'leak'));
+  } catch (err: unknown) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code === 'EPERM' || e.code === 'ENOSYS') {
+      await rm(dir, { recursive: true });
+      await rm(outsideTarget, { force: true });
+      return;
+    }
+    throw err;
+  }
+  await w(join(dir, 'content.md'), SAMPLE_CONTENT);
+  await buildDeck({ contentPath: join(dir, 'content.md'), outDir: join(dir, 'build') });
+  assert.ok(existsSync(join(dir, 'build', 'images', 'real.jpg')), 'real file should still be copied');
+  assert.equal(
+    existsSync(join(dir, 'build', 'images', 'leak')),
+    false,
+    'nested symlink must NOT be copied into build/'
+  );
+  // Sanity: the source symlink itself is in fact a symlink (so the test
+  // would meaningfully fail if rejectSymlink stopped working).
+  assert.ok(lstatSync(join(dir, 'images', 'leak')).isSymbolicLink());
+  await rm(dir, { recursive: true });
+  await rm(outsideTarget, { force: true });
+});
+
 test('buildDeck does NOT sync deckmark internals (AGENTS.md, annotations/, .gitignore, etc.) into build/', async () => {
   const { mkdir, writeFile: w } = await import('node:fs/promises');
   const { existsSync } = await import('node:fs');

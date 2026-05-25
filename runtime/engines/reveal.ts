@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, readdir, cp } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, readdir, cp, lstat } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,17 +43,34 @@ const EXCLUDED_FROM_ASSET_SYNC = new Set([
 ]);
 
 /**
+ * cp() filter that rejects symlinks at any depth. Required because
+ * `cp(..., { recursive: true })` without this would copy nested symlinks
+ * verbatim (e.g. `images/secret -> /etc/passwd`); the static server then
+ * follows them via stat()/readFile(), exposing arbitrary local files.
+ *
+ * `lstat` (not `stat`) is mandatory here — `stat` follows symlinks and
+ * would report the target's type, defeating the check.
+ */
+async function rejectSymlink(src: string): Promise<boolean> {
+  try {
+    const st = await lstat(src);
+    return !st.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Mirror non-internal files from the deck folder into build/ so the rendered
  * HTML can reference user assets (images, fonts, etc.) via stable relative
  * paths. Idempotent: re-running overwrites files in build/ but never deletes
  * extras (a removed asset in deckDir will still be served from build/ until
  * the next clean rebuild — acceptable for MVP).
  *
- * Symlinks at the deck root are skipped on purpose: copying a symlink like
- * `secret -> /etc/passwd` into build/ would let the review server (or
- * publish_deck) serve arbitrary local files via the deck. The static server
- * has its own containment check, but skipping symlinks here is defense in
- * depth.
+ * Symlinks are skipped at every depth (top-level entries + the `filter`
+ * passed to cp()) to keep links like `images/secret -> /etc/passwd` out of
+ * the published output. The static server has its own containment check,
+ * but this is defense in depth.
  */
 async function syncUserAssetsToBuild(deckDir: string, buildDir: string): Promise<void> {
   let entries: Dirent[];
@@ -71,11 +88,13 @@ async function syncUserAssetsToBuild(deckDir: string, buildDir: string): Promise
     if (e.name === buildBase) continue;
     // Top-level .html and .tgz files are likely publish artifacts; skip.
     if (!e.isDirectory() && (e.name.endsWith('.html') || e.name.endsWith('.tgz'))) continue;
-    // Symlinks: skip, to avoid copying links that point outside the deck.
+    // Fast path: skip top-level symlinks before recursing.
     if (e.isSymbolicLink()) continue;
     const src = join(deckDir, e.name);
     const dst = join(buildDir, e.name);
-    await cp(src, dst, { recursive: true, force: true });
+    // `filter` is applied to every src path cp() visits during recursion,
+    // so nested symlinks are rejected too — not just top-level ones.
+    await cp(src, dst, { recursive: true, force: true, filter: rejectSymlink });
   }
 }
 
