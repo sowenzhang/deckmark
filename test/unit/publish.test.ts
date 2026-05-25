@@ -37,6 +37,20 @@ test('multiFile writes deploy folder with index.html and vendor/reveal/', async 
   await rm(dir, { recursive: true });
 });
 
+test('multiFile fails clearly when buildDir has a FILE at vendor (not a directory)', async () => {
+  const dir = await setupDeck();
+  // Tamper: drop a plain file at build/vendor so the reveal dist overlay
+  // can't mkdir <outDir>/vendor/reveal on top of it. The engine's own sync
+  // excludes 'vendor', but multiFile is callable with any buildDir.
+  await writeFile(join(dir, 'build', 'vendor'), 'not-a-directory');
+  const outDir = join(dir, 'publish-bad');
+  await assert.rejects(
+    () => multiFile({ buildDir: join(dir, 'build'), outDir }),
+    /vendor.*not a directory/i
+  );
+  await rm(dir, { recursive: true });
+});
+
 test('inlineHtml refuses path-traversal references like vendor/reveal/../../etc', async () => {
   const dir = await setupDeck();
   // Tamper with the built HTML to inject a traversal reference. The
