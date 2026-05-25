@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "In-browser annotation for AI-generated presentations",
   "type": "module",
+  "bin": {
+    "deckmark-mcp": "dist/mcp/server.js"
+  },
   "license": "MIT",
   "repository": "github:sowenzhang/deckmark",
   "files": [

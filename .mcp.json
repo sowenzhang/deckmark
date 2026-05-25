@@ -1,6 +1,6 @@
 {
   "deckmark": {
-    "command": "node",
-    "args": ["${CLAUDE_PLUGIN_ROOT}/dist/mcp/server.js"]
+    "command": "npx",
+    "args": ["-y", "https://github.com/sowenzhang/deckmark/releases/latest/download/deckmark.tgz"]
   }
 }
