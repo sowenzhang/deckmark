@@ -1,6 +1,6 @@
 // runtime/publish/inline-html.ts
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { resolve, dirname, extname } from 'node:path';
+import { resolve, dirname, extname, sep } from 'node:path';
 import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 
@@ -13,6 +13,19 @@ function dbg(msg: string): void {
 // Use Node's module resolver — reveal.js may be hoisted to a parent
 // node_modules when deckmark is installed via npx. See static-overlay.ts.
 const REVEAL_DIST = dirname(require.resolve('reveal.js/dist/reveal.js'));
+
+/**
+ * True only when `candidate` resolves to a path equal to, or inside, `root`.
+ * Guards every inliner sink from path-traversal references that, after a
+ * `resolve(root, file)`, would land outside `root` and let the inliner
+ * read/embed arbitrary local files into the single-file HTML.
+ *
+ * Both reveal asset inlining (root = REVEAL_DIST) and image inlining
+ * (root = buildDir) use this — different sinks, same attack class.
+ */
+function isUnder(root: string, candidate: string): boolean {
+  return candidate === root || candidate.startsWith(root + sep);
+}
 
 function mimeFor(ext: string): string {
   switch (ext.toLowerCase()) {
@@ -57,9 +70,13 @@ async function replaceLinkStylesheets(html: string): Promise<string> {
   dbg(`  link matches: ${matches.length}`);
   for (const m of matches) {
     const href = m[1];
-    if (!href.startsWith('/vendor/reveal/')) continue;
-    const file = href.replace('/vendor/reveal/', '');
+    // Accept both relative ('vendor/reveal/...') and absolute ('/vendor/reveal/...')
+    // forms — engine now emits relative but old-published HTML may have absolute.
+    const VENDOR_RE = /^\/?vendor\/reveal\//;
+    if (!VENDOR_RE.test(href)) continue;
+    const file = href.replace(VENDOR_RE, '');
     const src = resolve(REVEAL_DIST, file);
+    if (!isUnder(REVEAL_DIST, src)) { dbg(`  skip traversal: ${src}`); continue; }
     if (!existsSync(src)) { dbg(`  skip missing: ${src}`); continue; }
     const css = await readFile(src, 'utf8');
     html = html.replace(m[0], `<style data-deckmark-inlined="${href}">\n${css}\n</style>`);
@@ -74,9 +91,11 @@ async function replaceScripts(html: string): Promise<string> {
   dbg(`  script matches: ${matches.length}`);
   for (const m of matches) {
     const src = m[1];
-    if (!src.startsWith('/vendor/reveal/')) continue;
-    const file = src.replace('/vendor/reveal/', '');
+    const VENDOR_RE = /^\/?vendor\/reveal\//;
+    if (!VENDOR_RE.test(src)) continue;
+    const file = src.replace(VENDOR_RE, '');
     const filePath = resolve(REVEAL_DIST, file);
+    if (!isUnder(REVEAL_DIST, filePath)) { dbg(`  skip traversal: ${filePath}`); continue; }
     if (!existsSync(filePath)) { dbg(`  skip missing: ${filePath}`); continue; }
     const js = await readFile(filePath, 'utf8');
     html = html.replace(m[0], `<script data-deckmark-inlined="${src}">\n${js}\n</script>`);
@@ -97,6 +116,11 @@ async function replaceImages(html: string, buildDir: string): Promise<string> {
     }
     const file = src.replace(/^[/.]+/, '');
     const filePath = resolve(buildDir, file);
+    // Containment guard: stripping leading '/' and '.' chars does NOT remove
+    // internal `..` segments, so `images/../../../etc/passwd` would still
+    // escape buildDir after resolve(). Reject anything that lands outside.
+    const buildResolved = resolve(buildDir);
+    if (!isUnder(buildResolved, filePath)) { dbg(`  skip traversal: ${filePath}`); continue; }
     if (!existsSync(filePath)) { dbg(`  skip missing local img: ${filePath}`); continue; }
     const ext = extname(filePath);
     const buf = await readFile(filePath);
