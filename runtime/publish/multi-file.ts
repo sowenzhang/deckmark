@@ -16,12 +16,16 @@ export interface MultiFileOpts {
 
 export async function multiFile(opts: MultiFileOpts): Promise<{ outDir: string; files: string[] }> {
   await mkdir(opts.outDir, { recursive: true });
-  // Copy reveal.js dist contents to outDir/vendor/reveal/
-  await mkdir(join(opts.outDir, 'vendor', 'reveal'), { recursive: true });
-  await cp(REVEAL_DIST, join(opts.outDir, 'vendor', 'reveal'), { recursive: true });
 
-  // Copy build/ contents (index.html and any embedded images) to outDir/
+  // Order matters: copy buildDir FIRST (user assets, including any
+  // user-named vendor/ that may have made it in), then overlay the
+  // official reveal.js dist LAST. Whatever path collisions exist,
+  // /vendor/reveal/* always reflects the real reveal.js — never user
+  // content masquerading under the same path.
   await cp(opts.buildDir, opts.outDir, { recursive: true, force: true });
+
+  await mkdir(join(opts.outDir, 'vendor', 'reveal'), { recursive: true });
+  await cp(REVEAL_DIST, join(opts.outDir, 'vendor', 'reveal'), { recursive: true, force: true });
 
   // Walk the output to list what landed
   const { readdir } = await import('node:fs/promises');

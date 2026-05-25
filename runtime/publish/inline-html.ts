@@ -57,8 +57,11 @@ async function replaceLinkStylesheets(html: string): Promise<string> {
   dbg(`  link matches: ${matches.length}`);
   for (const m of matches) {
     const href = m[1];
-    if (!href.startsWith('/vendor/reveal/')) continue;
-    const file = href.replace('/vendor/reveal/', '');
+    // Accept both relative ('vendor/reveal/...') and absolute ('/vendor/reveal/...')
+    // forms — engine now emits relative but old-published HTML may have absolute.
+    const VENDOR_RE = /^\/?vendor\/reveal\//;
+    if (!VENDOR_RE.test(href)) continue;
+    const file = href.replace(VENDOR_RE, '');
     const src = resolve(REVEAL_DIST, file);
     if (!existsSync(src)) { dbg(`  skip missing: ${src}`); continue; }
     const css = await readFile(src, 'utf8');
@@ -74,8 +77,9 @@ async function replaceScripts(html: string): Promise<string> {
   dbg(`  script matches: ${matches.length}`);
   for (const m of matches) {
     const src = m[1];
-    if (!src.startsWith('/vendor/reveal/')) continue;
-    const file = src.replace('/vendor/reveal/', '');
+    const VENDOR_RE = /^\/?vendor\/reveal\//;
+    if (!VENDOR_RE.test(src)) continue;
+    const file = src.replace(VENDOR_RE, '');
     const filePath = resolve(REVEAL_DIST, file);
     if (!existsSync(filePath)) { dbg(`  skip missing: ${filePath}`); continue; }
     const js = await readFile(filePath, 'utf8');

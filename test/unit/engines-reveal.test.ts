@@ -32,7 +32,9 @@ test('buildDeck produces index.html with both slides', async () => {
   assert.match(html, /<section[^>]*>[\s\S]*Slide One/);
   assert.match(html, /<section[^>]*>[\s\S]*Slide Two/);
   assert.match(html, /reveal\.js/);
-  assert.match(html, /\/vendor\/reveal\/reveal\.js/);
+  // Relative (no leading slash) so file:// open also works after publish_deck.
+  assert.match(html, /["']vendor\/reveal\/reveal\.js["']/);
+  assert.doesNotMatch(html, /["']\/vendor\/reveal/);
   await rm(dir, { recursive: true });
 });
 
@@ -75,8 +77,8 @@ test('buildDeck sets data-mode on <html> and embeds the style sheet', async () =
   assert.match(html, /<html[^>]+data-mode="dark"/);
   assert.match(html, /data-deckmark-style="academic"/);
   assert.match(html, /data-deckmark-mode="dark"/);
-  // dark mode loads the dark reveal base theme
-  assert.match(html, /\/vendor\/reveal\/theme\/black\.css/);
+  // dark mode loads the dark reveal base theme (relative path)
+  assert.match(html, /["']vendor\/reveal\/theme\/black\.css["']/);
   await rm(dir, { recursive: true });
 });
 
@@ -107,12 +109,9 @@ test('buildDeck mirrors user assets (images/) from deck folder into build/', asy
   const { existsSync } = await import('node:fs');
   const dir = await tmpDir();
   // Set up a deck with an images/ subfolder containing a couple of files
-  await mkdir(join(dir, 'images'), { recursive: true });
+  await mkdir(join(dir, 'images', 'nested'), { recursive: true });
   await w(join(dir, 'images', '1-0.jpg'), 'fake-jpeg-bytes');
-  await w(join(dir, 'images', 'nested', 'deep.png'), '', 'utf8').catch(async () => {
-    await mkdir(join(dir, 'images', 'nested'), { recursive: true });
-    await w(join(dir, 'images', 'nested', 'deep.png'), '');
-  });
+  await w(join(dir, 'images', 'nested', 'deep.png'), '');
   await w(join(dir, 'content.md'), SAMPLE_CONTENT);
   await buildDeck({ contentPath: join(dir, 'content.md'), outDir: join(dir, 'build') });
   // After build, images/ should be mirrored inside build/

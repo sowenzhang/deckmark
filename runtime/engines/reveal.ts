@@ -1,9 +1,15 @@
 import { mkdir, readFile, writeFile, readdir, cp } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { marked } from 'marked';
 
-const REVEAL_PREFIX = '/vendor/reveal';
+// Relative (no leading slash) so the emitted HTML works both as served
+// from the local review server AND as a standalone file:// open after
+// publish_deck multi-file mode. The dev server's /vendor/reveal/* route
+// still matches because the browser resolves the relative path against
+// the page URL, which is the server root '/'.
+const REVEAL_PREFIX = 'vendor/reveal';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -11,6 +17,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * Everything else (images/, fonts/, etc.) gets copied into build/ so the
  * rendered deck can reference assets via relative paths like
  * `<img src="images/foo.jpg">` and the local server can serve them.
+ *
+ * `vendor` is excluded so a user-provided `vendor/` folder cannot collide
+ * with — or overwrite — the official reveal.js dist that publish_deck
+ * (multi-file mode) places at `<outDir>/vendor/reveal/`.
  */
 const EXCLUDED_FROM_ASSET_SYNC = new Set([
   'content.md',
@@ -18,6 +28,7 @@ const EXCLUDED_FROM_ASSET_SYNC = new Set([
   'annotations',
   'build',
   'published',
+  'vendor',
   'node_modules',
   '.git',
   '.github',
@@ -37,9 +48,15 @@ const EXCLUDED_FROM_ASSET_SYNC = new Set([
  * paths. Idempotent: re-running overwrites files in build/ but never deletes
  * extras (a removed asset in deckDir will still be served from build/ until
  * the next clean rebuild — acceptable for MVP).
+ *
+ * Symlinks at the deck root are skipped on purpose: copying a symlink like
+ * `secret -> /etc/passwd` into build/ would let the review server (or
+ * publish_deck) serve arbitrary local files via the deck. The static server
+ * has its own containment check, but skipping symlinks here is defense in
+ * depth.
  */
 async function syncUserAssetsToBuild(deckDir: string, buildDir: string): Promise<void> {
-  let entries;
+  let entries: Dirent[];
   try {
     entries = await readdir(deckDir, { withFileTypes: true });
   } catch {
@@ -54,6 +71,8 @@ async function syncUserAssetsToBuild(deckDir: string, buildDir: string): Promise
     if (e.name === buildBase) continue;
     // Top-level .html and .tgz files are likely publish artifacts; skip.
     if (!e.isDirectory() && (e.name.endsWith('.html') || e.name.endsWith('.tgz'))) continue;
+    // Symlinks: skip, to avoid copying links that point outside the deck.
+    if (e.isSymbolicLink()) continue;
     const src = join(deckDir, e.name);
     const dst = join(buildDir, e.name);
     await cp(src, dst, { recursive: true, force: true });
