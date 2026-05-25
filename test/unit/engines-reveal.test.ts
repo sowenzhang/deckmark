@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, basename } from 'node:path';
 import { buildDeck } from '../../runtime/engines/reveal.ts';
 
 async function tmpDir() {
@@ -130,7 +130,9 @@ test('buildDeck skips nested symlinks during asset sync (security: no /etc/passw
   await mkdir(join(dir, 'images'), { recursive: true });
   await w(join(dir, 'images', 'real.jpg'), 'jpeg-bytes');
   // Drop a target file outside the deck and try to symlink to it from inside.
-  const outsideTarget = join(dir, '..', 'sensitive.txt');
+  // Name the target uniquely per run so concurrent tests don't collide on
+  // a shared path under the OS temp dir.
+  const outsideTarget = join(dir, '..', `sensitive-${basename(dir)}.txt`);
   await w(outsideTarget, 'SECRET');
   try {
     await symlink(outsideTarget, join(dir, 'images', 'leak'));
@@ -154,6 +156,75 @@ test('buildDeck skips nested symlinks during asset sync (security: no /etc/passw
   // Sanity: the source symlink itself is in fact a symlink (so the test
   // would meaningfully fail if rejectSymlink stopped working).
   assert.ok(lstatSync(join(dir, 'images', 'leak')).isSymbolicLink());
+  await rm(dir, { recursive: true });
+  await rm(outsideTarget, { force: true });
+});
+
+test('buildDeck does NOT copy a custom-named content file (e.g. slides.md) into build/', async () => {
+  const { writeFile: w } = await import('node:fs/promises');
+  const { existsSync } = await import('node:fs');
+  const dir = await tmpDir();
+  // Caller passes an arbitrary contentPath via the MCP layer — make sure the
+  // sync excludes whatever basename was used, not just the literal 'content.md'.
+  await w(join(dir, 'slides.md'), SAMPLE_CONTENT);
+  await buildDeck({ contentPath: join(dir, 'slides.md'), outDir: join(dir, 'build') });
+  assert.equal(
+    existsSync(join(dir, 'build', 'slides.md')),
+    false,
+    'custom-named content markdown should NOT be copied into build/'
+  );
+  // sanity: index.html still produced from it
+  assert.ok(existsSync(join(dir, 'build', 'index.html')));
+  await rm(dir, { recursive: true });
+});
+
+test('buildDeck does not accidentally skip a deck folder whose name matches the outDir basename', async () => {
+  const { mkdir, writeFile: w } = await import('node:fs/promises');
+  const { existsSync } = await import('node:fs');
+  const deckDir = await tmpDir();
+  // The deck legitimately has a folder called "output/" — it must be copied.
+  await mkdir(join(deckDir, 'output'), { recursive: true });
+  await w(join(deckDir, 'output', 'chart.png'), 'PNG');
+  await w(join(deckDir, 'content.md'), SAMPLE_CONTENT);
+  // Choose an outDir whose basename collides with the deck's 'output/' folder
+  // but lives in a different parent — the old basename-based skip would have
+  // dropped the deck's output/ on the floor.
+  const outParent = await tmpDir();
+  const outDir = join(outParent, 'output');
+  await buildDeck({ contentPath: join(deckDir, 'content.md'), outDir });
+  assert.ok(
+    existsSync(join(outDir, 'output', 'chart.png')),
+    "deck's output/ folder should be copied even when outDir basename is also 'output'"
+  );
+  await rm(deckDir, { recursive: true });
+  await rm(outParent, { recursive: true });
+});
+
+test('buildDeck removes stale symlinks left in build/ from a prior build', async () => {
+  const { mkdir, writeFile: w, symlink } = await import('node:fs/promises');
+  const { existsSync } = await import('node:fs');
+  const dir = await tmpDir();
+  await mkdir(join(dir, 'build', 'images'), { recursive: true });
+  const outsideTarget = join(dir, '..', `stale-${basename(dir)}.txt`);
+  await w(outsideTarget, 'STALE_SECRET');
+  try {
+    await symlink(outsideTarget, join(dir, 'build', 'images', 'leak'));
+  } catch (err: unknown) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code === 'EPERM' || e.code === 'ENOSYS') {
+      await rm(dir, { recursive: true });
+      await rm(outsideTarget, { force: true });
+      return;
+    }
+    throw err;
+  }
+  await w(join(dir, 'content.md'), SAMPLE_CONTENT);
+  await buildDeck({ contentPath: join(dir, 'content.md'), outDir: join(dir, 'build') });
+  assert.equal(
+    existsSync(join(dir, 'build', 'images', 'leak')),
+    false,
+    'stale symlink from a previous build must not survive a rebuild'
+  );
   await rm(dir, { recursive: true });
   await rm(outsideTarget, { force: true });
 });

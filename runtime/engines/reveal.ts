@@ -1,6 +1,6 @@
-import { mkdir, readFile, writeFile, readdir, cp, lstat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, readdir, cp, lstat, rm } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
-import { dirname, join, basename } from 'node:path';
+import { dirname, join, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { marked } from 'marked';
 
@@ -23,6 +23,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * (multi-file mode) places at `<outDir>/vendor/reveal/`.
  */
 const EXCLUDED_FROM_ASSET_SYNC = new Set([
+  // The content markdown is excluded dynamically by basename(opts.contentPath)
+  // — it may be named anything (slides.md, talk.md, etc.), and the MCP layer
+  // lets callers override it. 'content.md' stays here as a belt-and-suspenders
+  // default for the common case.
   'content.md',
   'deckmark.config.json',
   'annotations',
@@ -72,20 +76,30 @@ async function rejectSymlink(src: string): Promise<boolean> {
  * the published output. The static server has its own containment check,
  * but this is defense in depth.
  */
-async function syncUserAssetsToBuild(deckDir: string, buildDir: string): Promise<void> {
+async function syncUserAssetsToBuild(
+  deckDir: string,
+  buildDir: string,
+  contentBase: string
+): Promise<void> {
   let entries: Dirent[];
   try {
     entries = await readdir(deckDir, { withFileTypes: true });
   } catch {
     return;
   }
-  const buildBase = basename(buildDir);
+  // Compare resolved absolute paths — not basenames — so a deck that happens
+  // to contain a folder whose name matches the buildDir basename (e.g. an
+  // `output/` assets folder when outDir=/tmp/out/output/) doesn't get
+  // accidentally skipped. Only the literal buildDir is excluded.
+  const buildResolved = resolve(buildDir);
   for (const e of entries) {
     // Hidden / dotfiles never sync.
     if (e.name.startsWith('.')) continue;
     if (EXCLUDED_FROM_ASSET_SYNC.has(e.name)) continue;
-    // Don't sync the build dir itself (handles unusual outDir locations too).
-    if (e.name === buildBase) continue;
+    // Skip the content markdown (any filename — caller passes its basename).
+    if (e.name === contentBase) continue;
+    // Don't sync the build dir itself, even if it sits inside deckDir.
+    if (resolve(join(deckDir, e.name)) === buildResolved) continue;
     // Top-level .html and .tgz files are likely publish artifacts; skip.
     if (!e.isDirectory() && (e.name.endsWith('.html') || e.name.endsWith('.tgz'))) continue;
     // Fast path: skip top-level symlinks before recursing.
@@ -225,12 +239,24 @@ ${sections.join('\n')}
 </body>
 </html>`;
 
+  // Clean the build dir before each build. Without this, stale entries from
+  // a previous build (especially symlinks placed there before the asset-sync
+  // hardening landed) would persist and remain reachable through the static
+  // server's stat()/readFile() — defeating the symlink-rejection filter.
+  // `rm` + `mkdir` is cheap and produces deterministic, byte-equal output for
+  // the same input. Callers always pass an outDir under their own control
+  // (e.g. <deckDir>/build/); never invoke with an outDir you don't own.
+  await rm(opts.outDir, { recursive: true, force: true });
   await mkdir(opts.outDir, { recursive: true });
   // Mirror user assets (images/, fonts/, etc.) from the deck folder into
   // build/ before writing index.html, so the rendered deck can reference
   // them via relative paths and so publish_deck (which reads from build/)
   // can find them for inlining or for multi-file deploy.
-  await syncUserAssetsToBuild(dirname(opts.contentPath), opts.outDir);
+  await syncUserAssetsToBuild(
+    dirname(opts.contentPath),
+    opts.outDir,
+    basename(opts.contentPath)
+  );
   await writeFile(join(opts.outDir, 'index.html'), htmlDocument, 'utf8');
   return { outDir: opts.outDir, slideCount: sections.length, style, mode, motion, slideNumbers: slideNumberValue };
 }
