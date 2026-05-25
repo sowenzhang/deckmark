@@ -80,7 +80,7 @@ State lives in `./annotations/session-<timestamp>.json` next to your deck. Write
 
 ## Architecture
 
-Single Node 20+ package, TypeScript ESM. Three layers:
+Single Node 22+ package, TypeScript ESM. Three layers:
 
 - `runtime/` — engine (reveal.js adapter), Fastify review server with overlay script injection, atomic session store, sha256 build hash, browser overlay (vanilla TS bundled via esbuild), publish emitters (inline + multi-file), and project templates.
 - `mcp/` — stdio MCP server that exposes the seven tools by calling into the runtime modules.
