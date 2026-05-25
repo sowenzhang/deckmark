@@ -1,10 +1,64 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readFile, writeFile, readdir, cp } from 'node:fs/promises';
+import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { marked } from 'marked';
 
 const REVEAL_PREFIX = '/vendor/reveal';
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Names at the deck root that are deckmark/agent internals, NOT user assets.
+ * Everything else (images/, fonts/, etc.) gets copied into build/ so the
+ * rendered deck can reference assets via relative paths like
+ * `<img src="images/foo.jpg">` and the local server can serve them.
+ */
+const EXCLUDED_FROM_ASSET_SYNC = new Set([
+  'content.md',
+  'deckmark.config.json',
+  'annotations',
+  'build',
+  'published',
+  'node_modules',
+  '.git',
+  '.github',
+  '.gitignore',
+  '.claude-plugin',
+  '.mcp.json',
+  'AGENTS.md',
+  'CLAUDE.md',
+  'GEMINI.md',
+  '.codex',
+  '.cursor'
+]);
+
+/**
+ * Mirror non-internal files from the deck folder into build/ so the rendered
+ * HTML can reference user assets (images, fonts, etc.) via stable relative
+ * paths. Idempotent: re-running overwrites files in build/ but never deletes
+ * extras (a removed asset in deckDir will still be served from build/ until
+ * the next clean rebuild — acceptable for MVP).
+ */
+async function syncUserAssetsToBuild(deckDir: string, buildDir: string): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(deckDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  const buildBase = basename(buildDir);
+  for (const e of entries) {
+    // Hidden / dotfiles never sync.
+    if (e.name.startsWith('.')) continue;
+    if (EXCLUDED_FROM_ASSET_SYNC.has(e.name)) continue;
+    // Don't sync the build dir itself (handles unusual outDir locations too).
+    if (e.name === buildBase) continue;
+    // Top-level .html and .tgz files are likely publish artifacts; skip.
+    if (!e.isDirectory() && (e.name.endsWith('.html') || e.name.endsWith('.tgz'))) continue;
+    const src = join(deckDir, e.name);
+    const dst = join(buildDir, e.name);
+    await cp(src, dst, { recursive: true, force: true });
+  }
+}
 
 export type DeckStyle = 'professional' | 'academic' | 'fashion' | 'technical' | 'fun';
 export type DeckMode = 'light' | 'dark';
@@ -134,6 +188,11 @@ ${sections.join('\n')}
 </html>`;
 
   await mkdir(opts.outDir, { recursive: true });
+  // Mirror user assets (images/, fonts/, etc.) from the deck folder into
+  // build/ before writing index.html, so the rendered deck can reference
+  // them via relative paths and so publish_deck (which reads from build/)
+  // can find them for inlining or for multi-file deploy.
+  await syncUserAssetsToBuild(dirname(opts.contentPath), opts.outDir);
   await writeFile(join(opts.outDir, 'index.html'), htmlDocument, 'utf8');
   return { outDir: opts.outDir, slideCount: sections.length, style, mode, motion, slideNumbers: slideNumberValue };
 }
