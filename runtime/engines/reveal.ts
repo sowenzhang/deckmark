@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile, readdir, cp, lstat, rm } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
-import { dirname, join, basename, resolve } from 'node:path';
+import { dirname, join, basename, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { marked } from 'marked';
 
@@ -239,13 +239,27 @@ ${sections.join('\n')}
 </body>
 </html>`;
 
-  // Clean the build dir before each build. Without this, stale entries from
-  // a previous build (especially symlinks placed there before the asset-sync
-  // hardening landed) would persist and remain reachable through the static
-  // server's stat()/readFile() — defeating the symlink-rejection filter.
-  // `rm` + `mkdir` is cheap and produces deterministic, byte-equal output for
-  // the same input. Callers always pass an outDir under their own control
-  // (e.g. <deckDir>/build/); never invoke with an outDir you don't own.
+  // Clean the build dir before each build so stale entries (especially any
+  // pre-existing symlinks) can't survive a rebuild and remain reachable
+  // through the static server. Because `rm({ recursive: true })` is
+  // destructive, refuse pathological outDir values before invoking it:
+  //   - a filesystem root (e.g. '/' or 'C:\\') — wiping the drive
+  //   - any dir that contains opts.contentPath — wiping the deck source
+  // Together these guards make accidental misuse fail loudly instead of
+  // deleting data.
+  const resolvedOutDir = resolve(opts.outDir);
+  const resolvedContent = resolve(opts.contentPath);
+  if (dirname(resolvedOutDir) === resolvedOutDir) {
+    throw new Error(
+      `buildDeck: refusing to clean filesystem root as outDir: ${resolvedOutDir}`
+    );
+  }
+  const outDirWithSep = resolvedOutDir.endsWith(sep) ? resolvedOutDir : resolvedOutDir + sep;
+  if (resolvedContent === resolvedOutDir || resolvedContent.startsWith(outDirWithSep)) {
+    throw new Error(
+      `buildDeck: refusing to clean outDir ${resolvedOutDir} — it contains the deck source ${resolvedContent}`
+    );
+  }
   await rm(opts.outDir, { recursive: true, force: true });
   await mkdir(opts.outDir, { recursive: true });
   // Mirror user assets (images/, fonts/, etc.) from the deck folder into

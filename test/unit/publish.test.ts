@@ -36,3 +36,27 @@ test('multiFile writes deploy folder with index.html and vendor/reveal/', async 
   assert.ok(r.files.some(f => f.startsWith('vendor/reveal/')));
   await rm(dir, { recursive: true });
 });
+
+test('inlineHtml refuses path-traversal references like vendor/reveal/../../etc', async () => {
+  const dir = await setupDeck();
+  // Tamper with the built HTML to inject a traversal reference. The
+  // resolve() against REVEAL_DIST would land outside the reveal dist, and
+  // without the containment guard the inliner would happily readFile()
+  // whatever local file the user pointed at.
+  const indexPath = join(dir, 'build', 'index.html');
+  const orig = await readFile(indexPath, 'utf8');
+  const tampered = orig
+    .replace('href="vendor/reveal/reveal.css"', 'href="vendor/reveal/../../../../../../../etc/passwd"')
+    .replace('src="vendor/reveal/reveal.js"', 'src="vendor/reveal/../../../../../../../etc/hosts"');
+  await writeFile(indexPath, tampered, 'utf8');
+  const outFile = join(dir, 'tampered.html');
+  await inlineHtml({ buildDir: join(dir, 'build'), outFile });
+  const html = await readFile(outFile, 'utf8');
+  // The tampered hrefs should remain as plain <link>/<script> tags — not
+  // replaced with inlined content. (We don't assert the file contents
+  // weren't read, because the guard short-circuits before readFile.)
+  assert.doesNotMatch(html, /data-deckmark-inlined="vendor\/reveal\/\.\.\//);
+  // No /etc/* bytes ended up in the output, regardless of platform.
+  assert.doesNotMatch(html, /root:x:/);
+  await rm(dir, { recursive: true });
+});

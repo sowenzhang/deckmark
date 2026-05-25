@@ -59,6 +59,35 @@ test('buildDeck de-duplicates slugs when titles collide', async () => {
   await rm(dir, { recursive: true });
 });
 
+test('buildDeck refuses to clean an outDir that contains the deck source', async () => {
+  const dir = await tmpDir();
+  await writeFile(join(dir, 'content.md'), SAMPLE_CONTENT);
+  // outDir = the deck dir itself. Without the guard, rm({ recursive: true })
+  // would wipe content.md before reading it. The guard must catch it before
+  // any destructive call.
+  await assert.rejects(
+    () => buildDeck({ contentPath: join(dir, 'content.md'), outDir: dir }),
+    /refusing to clean outDir/i
+  );
+  // Source survived the rejected call.
+  const stillThere = await readFile(join(dir, 'content.md'), 'utf8');
+  assert.match(stillThere, /Slide One/);
+  await rm(dir, { recursive: true });
+});
+
+test('buildDeck refuses to clean filesystem root', async () => {
+  const dir = await tmpDir();
+  await writeFile(join(dir, 'content.md'), SAMPLE_CONTENT);
+  // Pick a platform-appropriate root. The check is path-based so no actual
+  // rm is attempted — we only need to confirm the guard fires.
+  const root = process.platform === 'win32' ? 'C:\\' : '/';
+  await assert.rejects(
+    () => buildDeck({ contentPath: join(dir, 'content.md'), outDir: root }),
+    /refusing to clean filesystem root/i
+  );
+  await rm(dir, { recursive: true });
+});
+
 test('buildDeck throws when content has no slides', async () => {
   const dir = await tmpDir();
   await writeFile(join(dir, 'content.md'), '\n\n---\n\n');
