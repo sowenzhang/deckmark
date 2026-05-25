@@ -24,6 +24,7 @@
     "build:overlay": "node esbuild.overlay.mjs",
     "typecheck:overlay": "tsc -p tsconfig.overlay.json",
     "build": "npm run build:src && npm run typecheck:overlay && npm run build:overlay",
+    "prepack": "npm run build",
     "test": "node scripts/run-tests.mjs test",
     "test:unit": "node scripts/run-tests.mjs test/unit",
     "test:integration": "node scripts/run-tests.mjs test/integration",
