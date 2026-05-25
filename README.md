@@ -2,7 +2,7 @@
 
 In-browser annotation for AI-generated presentations. Close the feedback loop without screenshots — works with any AI coding agent that speaks MCP.
 
-You install deckmark once into your agent. Then you type `/deckmark:use-deckmark <topic>` and the agent asks about theme and style, builds a slide deck, opens it in your browser with an annotation overlay, you click directly on elements to leave change requests, and when you come back to the agent it reads those annotations and applies them. No screenshots, no copy-paste, no terminal–browser ping-pong.
+You install deckmark once into your agent. Then you type `/deckmark:use-deckmark <topic>` and the agent asks about **mode**, **style**, and **motion**, builds a slide deck, opens it in your browser with an annotation overlay, you click directly on elements to leave change requests, and when you come back to the agent it reads those annotations and applies them. No screenshots, no copy-paste, no terminal–browser ping-pong.
 
 ---
 
