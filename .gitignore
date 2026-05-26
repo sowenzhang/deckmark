@@ -36,9 +36,6 @@ Thumbs.db
 
 # Dogfood artifacts — generated when invoking init_deck on this repo for manual testing
 # Anchored to repo root so runtime/templates/ versions are unaffected
-/AGENTS.md
-/CLAUDE.md
-/GEMINI.md
 /content.md
 /deckmark.config.json
 /annotations/
