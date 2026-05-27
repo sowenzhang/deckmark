@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   release:
+    # Requires repo secret NPM_TOKEN (npm "Automation" token with publish scope).
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,6 +20,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Verify tag matches package.json version
         run: |
@@ -45,6 +47,11 @@ jobs:
           npm pack
           mv deckmark-*.tgz deckmark.tgz
           ls -lh deckmark.tgz
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
       - name: Create / update GitHub Release with tarball asset
         uses: softprops/action-gh-release@v2
