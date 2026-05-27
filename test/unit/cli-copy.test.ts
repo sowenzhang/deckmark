@@ -78,6 +78,20 @@ test('copyFile refuses to overwrite when dest exists and force=false', async () 
   await rm(dir, { recursive: true, force: true });
 });
 
+test('copyDir with force=true removes stale files from dest', async () => {
+  const src = await tmp();
+  const dest = await tmp();
+  await writeFile(join(src, 'new.txt'), 'new');
+  await writeFile(join(dest, 'stale.txt'), 'stale');
+
+  await copyDir(src, dest, { force: true });
+
+  assert.equal(await readFile(join(dest, 'new.txt'), 'utf8'), 'new');
+  await assert.rejects(() => readFile(join(dest, 'stale.txt'), 'utf8'));
+  await rm(src, { recursive: true, force: true });
+  await rm(dest, { recursive: true, force: true });
+});
+
 test('fileHash produces stable sha256 for same content', async () => {
   const dir = await tmp();
   const p = join(dir, 'a.txt');

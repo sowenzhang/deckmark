@@ -1,5 +1,5 @@
 // cli/copy.ts
-import { cp, mkdir, copyFile as nodeCopyFile, readFile, stat } from 'node:fs/promises';
+import { cp, mkdir, rm, copyFile as nodeCopyFile, readFile, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';
 
@@ -11,16 +11,21 @@ async function exists(path: string): Promise<boolean> {
   try {
     await stat(path);
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw e;
   }
 }
 
 export async function copyDir(src: string, dest: string, opts: CopyOptions): Promise<void> {
-  if (!opts.force && (await exists(dest))) {
+  const destExists = await exists(dest);
+  if (destExists && !opts.force) {
     throw new Error(`destination already exists: ${dest} (use --force to overwrite)`);
   }
-  await cp(src, dest, { recursive: true, force: true });
+  if (destExists && opts.force) {
+    await rm(dest, { recursive: true, force: true });
+  }
+  await cp(src, dest, { recursive: true });
 }
 
 export async function copyFile(src: string, dest: string, opts: CopyOptions): Promise<void> {
