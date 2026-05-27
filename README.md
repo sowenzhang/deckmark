@@ -2,7 +2,7 @@
 
 In-browser annotation for AI-generated presentations. Close the feedback loop without screenshots — works with any AI coding agent that speaks MCP.
 
-You install deckmark once into your agent. Then you type `/deckmark:use-deckmark <topic>` and the agent asks about **mode**, **style**, and **motion**, builds a slide deck, opens it in your browser with an annotation overlay, you click directly on elements to leave change requests, and when you come back to the agent it reads those annotations and applies them. No screenshots, no copy-paste, no terminal–browser ping-pong.
+You install deckmark once into your agent. Then you type `/use-deckmark <topic>` and the agent asks about **mode**, **style**, and **motion**, builds a slide deck, opens it in your browser with an annotation overlay, you click directly on elements to leave change requests, and when you come back to the agent it reads those annotations and applies them. No screenshots, no copy-paste, no terminal–browser ping-pong.
 
 ---
 
@@ -37,6 +37,7 @@ If you prefer the Claude Code plugin marketplace:
 ```
 
 This path remains supported for users who already have it set up.
+After the marketplace install, invoke the command as `/deckmark:use-deckmark` instead of `/use-deckmark`.
 </details>
 
 ---
@@ -46,7 +47,7 @@ This path remains supported for users who already have it set up.
 After install, in your agent's chat:
 
 ```
-/deckmark:use-deckmark Build a deck about Q2 results for the engineering org, dark mode, technical style
+/use-deckmark Build a deck about Q2 results for the engineering org, dark mode, technical style
 ```
 
 The agent will:
@@ -63,7 +64,7 @@ The agent will:
 ## How it works
 
 ```
-user types /deckmark:use-deckmark <topic>
+user types /use-deckmark <topic>
         ↓
 agent asks: mode? style? motion? audience? length?
         ↓
