@@ -8,49 +8,36 @@ You install deckmark once into your agent. Then you type `/deckmark:use-deckmark
 
 ## Install
 
-### Claude Code
-
+```sh
+npx -y deckmark install
 ```
-/plugin marketplace add sowenzhang/deckmark
+
+That's it. Open Claude Code in any project and type `/use-deckmark`.
+
+Install into the current project only (instead of your user home):
+
+```sh
+npx -y deckmark install --project
+```
+
+### Uninstall
+
+```sh
+npx -y deckmark uninstall          # or --project
+```
+
+<details>
+<summary>Install via Claude Code marketplace (legacy)</summary>
+
+If you prefer the Claude Code plugin marketplace:
+
+```text
+/plugin marketplace add github:sowenzhang/deckmark
 /plugin install deckmark@deckmark-marketplace
 ```
 
-Quit and reopen Claude Code so the MCP server spawns. Verify with `/mcp` — deckmark should show as **connected**. Then `/deckmark:use-deckmark <topic>` is available.
-
-### Other MCP-aware agents (Gemini CLI, Codex, GitHub Copilot CLI, Cursor, …)
-
-deckmark ships an MCP server bundled in a GitHub Release tarball, fetched on demand via `npx`. Add the following to your agent's MCP config (typical paths: `~/.gemini/settings.json`, `~/.codex/config.toml`, `~/.cursor/mcp.json`, etc. — consult your agent's docs for the right file):
-
-```json
-{
-  "mcpServers": {
-    "deckmark": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "--package",
-        "https://github.com/sowenzhang/deckmark/releases/latest/download/deckmark.tgz",
-        "deckmark-mcp"
-      ]
-    }
-  }
-}
-```
-
-Restart the agent. The seven deckmark MCP tools become callable. (Note: the slash command `/deckmark:use-deckmark` and the design-system skill are Claude Code–specific packaging conventions and won't appear in other agents. The tools themselves work everywhere — just describe your intent in natural language and the agent will call them.)
-
-### Updating to a new release
-
-When a new version ships:
-
-```
-/plugin marketplace update deckmark-marketplace
-/plugin install deckmark@deckmark-marketplace
-```
-
-Restart Claude. The npx invocation always fetches the `latest` release tarball, so a Claude restart is usually enough on its own.
-
-For non-Claude agents, no update step is needed — `latest/download/deckmark.tgz` is a redirect that always points at the newest release. Restart the agent and `npx` will pick up the new tarball automatically.
+This path remains supported for users who already have it set up.
+</details>
 
 ---
 
