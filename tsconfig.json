@@ -16,6 +16,6 @@
     "rewriteRelativeImportExtensions": true,
     "noEmit": false
   },
-  "include": ["runtime/**/*.ts", "mcp/**/*.ts"],
+  "include": ["runtime/**/*.ts", "mcp/**/*.ts", "cli/**/*.ts"],
   "exclude": ["runtime/overlay/**/*", "node_modules", "dist"]
 }
