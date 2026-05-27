@@ -21,7 +21,11 @@ function packageRoot(): string {
 }
 
 async function exists(p: string): Promise<boolean> {
-  try { await stat(p); return true; } catch { return false; }
+  try { await stat(p); return true; }
+  catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw e;
+  }
 }
 
 async function dirsMatch(a: string, b: string): Promise<boolean> {
@@ -56,43 +60,59 @@ async function listFiles(root: string, prefix = ''): Promise<string[]> {
 export async function uninstall(opts: Options): Promise<void> {
   const root = packageRoot();
 
-  // Step 1: remove MCP entry
   const cfgPath = configPath(opts.scope);
+  const skillSrc = join(root, 'skills', skillName);
+  const skillDest = join(skillsDir(opts.scope), skillName);
+  const cmdSrc = join(root, 'commands', commandFileName);
+  const cmdDest = join(commandsDir(opts.scope), commandFileName);
+
+  // --- Pre-flight: read config and run all hash comparisons BEFORE any writes ---
+
+  // Step 1 (read-only): determine MCP presence
   const cfg = await readConfig(cfgPath);
-  if (cfg.mcpServers?.[mcpKey]) {
+  const mcpPresent = !!cfg.mcpServers?.[mcpKey];
+
+  // Step 2 (read-only): check skill dir
+  const skillExists = await exists(skillDest);
+  if (skillExists && !opts.force) {
+    if (!(await dirsMatch(skillSrc, skillDest))) {
+      throw new Error(
+        `skill at ${skillDest} differs from packaged version. ` +
+        `Save your changes and re-run with --force.`
+      );
+    }
+  }
+
+  // Step 3 (read-only): check command file
+  const cmdExists = await exists(cmdDest);
+  if (cmdExists && !opts.force) {
+    const same = (await fileHash(cmdSrc)) === (await fileHash(cmdDest));
+    if (!same) {
+      throw new Error(
+        `command at ${cmdDest} differs from packaged version. ` +
+        `Save your changes and re-run with --force.`
+      );
+    }
+  }
+
+  // --- Destructive work (all checks passed) ---
+
+  // Step 1: remove MCP entry
+  if (mcpPresent) {
     await writeConfigAtomic(cfgPath, removeMcpEntry(cfg, mcpKey));
     console.log(`✓ removed mcpServers.${mcpKey} from ${cfgPath}`);
   } else {
     console.log(`= mcpServers.${mcpKey} not present in ${cfgPath}`);
   }
 
-  // Step 2: remove skill folder (compare to package version first)
-  const skillSrc = join(root, 'skills', skillName);
-  const skillDest = join(skillsDir(opts.scope), skillName);
-  if (await exists(skillDest)) {
-    if (!opts.force && !(await dirsMatch(skillSrc, skillDest))) {
-      throw new Error(
-        `skill at ${skillDest} differs from packaged version. ` +
-        `Save your changes and re-run with --force.`
-      );
-    }
+  // Step 2: remove skill folder
+  if (skillExists) {
     await rm(skillDest, { recursive: true, force: true });
     console.log(`✓ removed skill at ${skillDest}`);
   }
 
-  // Step 3: remove slash command (single-file hash compare)
-  const cmdSrc = join(root, 'commands', commandFileName);
-  const cmdDest = join(commandsDir(opts.scope), commandFileName);
-  if (await exists(cmdDest)) {
-    if (!opts.force) {
-      const same = (await fileHash(cmdSrc)) === (await fileHash(cmdDest));
-      if (!same) {
-        throw new Error(
-          `command at ${cmdDest} differs from packaged version. ` +
-          `Save your changes and re-run with --force.`
-        );
-      }
-    }
+  // Step 3: remove slash command
+  if (cmdExists) {
     await rm(cmdDest, { force: true });
     console.log(`✓ removed slash command at ${cmdDest}`);
   }
