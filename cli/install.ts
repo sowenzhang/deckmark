@@ -22,7 +22,7 @@ import type { Options } from './types.ts';
 
 const MCP_ENTRY: McpEntry = {
   command: 'npx',
-  args: ['-y', 'deckmark-mcp']
+  args: ['-y', '--package', 'deckmark', 'deckmark-mcp']
 };
 
 function packageRoot(): string {

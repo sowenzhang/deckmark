@@ -129,7 +129,7 @@ Single Node 22+ package, TypeScript ESM. Three layers:
 
 The overlay knows nothing about reveal.js. It walks the rendered DOM and generates stable CSS selectors, so engine adapters for Slidev / Impress / Marp can be added later without changing a line of overlay code. reveal.js is vendored via npm (`node_modules/reveal.js/dist/`) — no CDN dependency, works offline.
 
-The MCP server ships as a Node CLI in a GitHub Release tarball. `.mcp.json` invokes it via `npx`, which downloads the tarball (and its dependencies) into its cache on first use and re-uses it from then on. No build step at install time, and nothing is installed into the user’s deck project directory.
+The MCP server is published to npm as part of the `deckmark` package. `~/.claude.json` invokes it via `npx -y --package deckmark deckmark-mcp`, which downloads the package (and its dependencies) into npx’s cache on first use and re-uses it from then on. No build step at install time, and nothing is installed into the user’s deck project directory.
 
 ---
 

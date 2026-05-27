@@ -37,7 +37,7 @@ test('install + uninstall round-trip writes and removes all artifacts', async ()
     const cfg = JSON.parse(await readFile(cfgPath, 'utf8'));
     assert.deepEqual(cfg.mcpServers.deckmark, {
       command: 'npx',
-      args: ['-y', 'deckmark-mcp']
+      args: ['-y', '--package', 'deckmark', 'deckmark-mcp']
     });
 
     assert.ok(await exists(join(home, '.claude', 'skills', 'deckmark', 'SKILL.md')));
@@ -81,7 +81,7 @@ test('install --force overwrites different MCP entry', async () => {
     const cfg = JSON.parse(await readFile(cfgPath, 'utf8'));
     assert.deepEqual(cfg.mcpServers.deckmark, {
       command: 'npx',
-      args: ['-y', 'deckmark-mcp']
+      args: ['-y', '--package', 'deckmark', 'deckmark-mcp']
     });
   });
 });
@@ -95,7 +95,7 @@ test('install is idempotent when entry already matches', async () => {
     const cfg = JSON.parse(await readFile(join(home, '.claude.json'), 'utf8'));
     assert.deepEqual(cfg.mcpServers.deckmark, {
       command: 'npx',
-      args: ['-y', 'deckmark-mcp']
+      args: ['-y', '--package', 'deckmark', 'deckmark-mcp']
     });
   });
 });
