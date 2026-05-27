@@ -45,11 +45,24 @@ export function removeMcpEntry(cfg: ConfigShape, key: string): ConfigShape {
   return { ...cfg, mcpServers: next };
 }
 
+function envsEqual(a: Record<string, string> | undefined, b: Record<string, string> | undefined): boolean {
+  const aKeys = Object.keys(a ?? {}).sort();
+  const bKeys = Object.keys(b ?? {}).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i++) {
+    if (aKeys[i] !== bKeys[i]) return false;
+    if ((a ?? {})[aKeys[i]] !== (b ?? {})[bKeys[i]]) return false;
+  }
+  return true;
+}
+
 export function mcpEntriesEqual(a: McpEntry | undefined, b: McpEntry): boolean {
   if (!a) return false;
   if (a.command !== b.command) return false;
   const aArgs = a.args ?? [];
   const bArgs = b.args ?? [];
   if (aArgs.length !== bArgs.length) return false;
-  return aArgs.every((v, i) => v === bArgs[i]);
+  if (!aArgs.every((v, i) => v === bArgs[i])) return false;
+  if (!envsEqual(a.env, b.env)) return false;
+  return true;
 }

@@ -4,7 +4,7 @@ import { strict as assert } from 'node:assert';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readConfig, writeConfigAtomic, setMcpEntry, removeMcpEntry } from '../../cli/config.ts';
+import { readConfig, writeConfigAtomic, setMcpEntry, removeMcpEntry, mcpEntriesEqual } from '../../cli/config.ts';
 
 async function tmp() {
   return await mkdtemp(join(tmpdir(), 'deckmark-cfg-'));
@@ -75,4 +75,71 @@ test('removeMcpEntry on missing key is a no-op', () => {
   const cfg = { mcpServers: { other: { command: 'x' } } };
   const next = removeMcpEntry(cfg, 'deckmark');
   assert.deepEqual(next, { mcpServers: { other: { command: 'x' } } });
+});
+
+test('mcpEntriesEqual returns false when a is undefined', () => {
+  assert.equal(mcpEntriesEqual(undefined, { command: 'npx' }), false);
+});
+
+test('mcpEntriesEqual returns true for identical entries', () => {
+  const e = { command: 'npx', args: ['-y', 'deckmark-mcp'] };
+  assert.equal(mcpEntriesEqual(e, { ...e, args: [...e.args] }), true);
+});
+
+test('mcpEntriesEqual returns false on different command', () => {
+  assert.equal(
+    mcpEntriesEqual({ command: 'npx' }, { command: 'node' }),
+    false
+  );
+});
+
+test('mcpEntriesEqual returns false on different args length', () => {
+  assert.equal(
+    mcpEntriesEqual({ command: 'npx', args: ['a'] }, { command: 'npx', args: ['a', 'b'] }),
+    false
+  );
+});
+
+test('mcpEntriesEqual returns false on different args content', () => {
+  assert.equal(
+    mcpEntriesEqual({ command: 'npx', args: ['a'] }, { command: 'npx', args: ['b'] }),
+    false
+  );
+});
+
+test('mcpEntriesEqual treats missing args as empty array', () => {
+  assert.equal(
+    mcpEntriesEqual({ command: 'npx' }, { command: 'npx', args: [] }),
+    true
+  );
+});
+
+test('mcpEntriesEqual returns false when env differs', () => {
+  assert.equal(
+    mcpEntriesEqual(
+      { command: 'npx', args: ['-y', 'deckmark-mcp'], env: { FOO: 'bar' } },
+      { command: 'npx', args: ['-y', 'deckmark-mcp'] }
+    ),
+    false
+  );
+});
+
+test('mcpEntriesEqual returns true when both have identical env', () => {
+  assert.equal(
+    mcpEntriesEqual(
+      { command: 'npx', env: { FOO: 'bar', BAZ: 'qux' } },
+      { command: 'npx', env: { BAZ: 'qux', FOO: 'bar' } }
+    ),
+    true
+  );
+});
+
+test('mcpEntriesEqual treats missing env as equal to empty env', () => {
+  assert.equal(
+    mcpEntriesEqual(
+      { command: 'npx' },
+      { command: 'npx', env: {} }
+    ),
+    true
+  );
 });
