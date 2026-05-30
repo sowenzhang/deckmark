@@ -31,13 +31,17 @@ function placePin(layer: HTMLElement, section: HTMLElement, a: Annotation, num: 
   if (!target) return; // stale selector — skip (v2 could re-anchor via bbox)
   const rect = target.getBoundingClientRect();
   const sectionRect = section.getBoundingClientRect();
+  const scaleX = section.offsetWidth > 0 ? sectionRect.width / section.offsetWidth : 1;
+  const scaleY = section.offsetHeight > 0 ? sectionRect.height / section.offsetHeight : 1;
+  const unscaledX = Number.isFinite(scaleX) && scaleX > 0 ? (rect.left - sectionRect.left) / scaleX : rect.left - sectionRect.left;
+  const unscaledY = Number.isFinite(scaleY) && scaleY > 0 ? (rect.top - sectionRect.top) / scaleY : rect.top - sectionRect.top;
   const pin = document.createElement('div');
   pin.className = 'deckmark-pin';
   pin.dataset.status = a.status;
   pin.textContent = String(num);
   pin.title = a.comment;
-  pin.style.left = `${rect.left - sectionRect.left - 12}px`;
-  pin.style.top = `${rect.top - sectionRect.top - 12}px`;
+  pin.style.left = `${unscaledX - 12}px`;
+  pin.style.top = `${unscaledY - 12}px`;
   pin.style.pointerEvents = 'auto';
   pin.addEventListener('click', () => {
     alert(`Annotation #${num}\n\n${a.comment}`);
