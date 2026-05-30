@@ -1,5 +1,5 @@
 // mcp/tools/build.ts
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import {
   buildDeck,
   listStyles,
@@ -19,6 +19,15 @@ interface BuildInput {
   customCss?: string;
   template?: string;
   markedPlugins?: string[];
+}
+
+function resolveWithinDir(dir: string, filePath: string, label: string): string {
+  const resolved = resolve(dir, filePath);
+  const rel = relative(dir, resolved);
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error(`${label} must be relative to dir`);
+  }
+  return resolved;
 }
 
 export const buildDeckTool = {
@@ -83,9 +92,9 @@ export const buildDeckTool = {
       mode: opts.mode,
       motion: opts.motion,
       slideNumbers: opts.slideNumbers,
-      customCssPath: opts.customCss ? resolve(cwd, opts.customCss) : undefined,
-      templatePath: opts.template ? resolve(cwd, opts.template) : undefined,
-      markedPlugins: opts.markedPlugins?.map(p => resolve(cwd, p))
+      customCssPath: opts.customCss ? resolveWithinDir(cwd, opts.customCss, 'customCss') : undefined,
+      templatePath: opts.template ? resolveWithinDir(cwd, opts.template, 'template') : undefined,
+      markedPlugins: opts.markedPlugins?.map(p => resolveWithinDir(cwd, p, 'markedPlugins'))
     });
     return {
       out_dir: result.outDir,
