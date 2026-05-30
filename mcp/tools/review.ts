@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { createServer } from '../../runtime/server/factory.ts';
-import { createSession, readSession } from '../../runtime/store/session-store.ts';
+import { createSession, readSession, closeSession } from '../../runtime/store/session-store.ts';
 import { buildHash } from '../../runtime/store/build-hash.ts';
 
 interface RunningServer {
@@ -36,6 +36,7 @@ export const startReviewTool = {
     const deckDir = opts.dir ? resolve(process.cwd(), opts.dir) : process.cwd();
     const existing = [...running.values()].filter(r => r.deckDir === deckDir);
     for (const r of existing) {
+      try { await closeSession({ deckDir: r.deckDir, sessionId: r.sessionId }); } catch { /* ignore */ }
       try { await r.app.close(); } catch { /* ignore */ }
     }
     const hash = await buildHash(resolve(deckDir, 'build'));
