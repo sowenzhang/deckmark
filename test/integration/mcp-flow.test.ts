@@ -107,8 +107,22 @@ test('full MCP flow: init → build → start_review → POST annotation → get
   const startOut = JSON.parse(startRes.content[0].text) as { url: string; session_id: string };
   assert.match(startOut.url, /^http:\/\/127\.0\.0\.1:\d+$/);
 
+  // starting a new review for the same deck should close the old server first
+  const startRes2 = await client.call('tools/call', {
+    name: 'start_review',
+    arguments: { dir: deckDir }
+  }) as { content: Array<{ text: string }> };
+  const startOut2 = JSON.parse(startRes2.content[0].text) as { url: string; session_id: string };
+  assert.notEqual(startOut2.session_id, startOut.session_id);
+  const oldStop = await client.call('tools/call', {
+    name: 'stop_review',
+    arguments: { session_id: startOut.session_id }
+  }) as { content: Array<{ text: string }> };
+  const oldStopOut = JSON.parse(oldStop.content[0].text) as { stopped: boolean };
+  assert.equal(oldStopOut.stopped, false);
+
   // POST an annotation via HTTP
-  const post = await fetch(`${startOut.url}/api/annotations`, {
+  const post = await fetch(`${startOut2.url}/api/annotations`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -142,6 +156,6 @@ test('full MCP flow: init → build → start_review → POST annotation → get
   // stop_review
   await client.call('tools/call', {
     name: 'stop_review',
-    arguments: { session_id: startOut.session_id }
+    arguments: { session_id: startOut2.session_id }
   });
 });

@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile, readdir, cp, lstat, rm } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import { dirname, join, basename, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { marked } from 'marked';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { Marked } from 'marked';
 
 // Relative (no leading slash) so the emitted HTML works both as served
 // from the local review server AND as a standalone file:// open after
@@ -124,6 +124,12 @@ export interface BuildOpts {
   motion?: DeckMotion[];
   /** Show slide numbers in the corner. Pass true for "current / total", a string for custom reveal.js format. */
   slideNumbers?: boolean | 'c' | 'c/t' | 'h.v' | 'h/v';
+  /** Optional path to extra CSS appended after the built-in deckmark theme. */
+  customCssPath?: string;
+  /** Optional path to a custom HTML template with DECKMARK_* placeholders. */
+  templatePath?: string;
+  /** Optional list of local module paths exporting default/register(marked) plugin hooks. */
+  markedPlugins?: string[];
 }
 
 export interface BuildResult {
@@ -171,6 +177,7 @@ export async function buildDeck(opts: BuildOpts): Promise<BuildResult> {
   const slideNumberValue: false | string = slideNumbers === false
     ? false
     : (slideNumbers === true ? 'c/t' : slideNumbers);
+  const md = await createMarkedRenderer(opts.markedPlugins);
 
   const raw = await readFile(opts.contentPath, 'utf8');
   const blocks = raw.split(/^\s*---\s*$/m).map(s => s.trim()).filter(Boolean);
@@ -180,7 +187,7 @@ export async function buildDeck(opts: BuildOpts): Promise<BuildResult> {
 
   const slugCounts = new Map<string, number>();
   const sections = blocks.map((block, i) => {
-    let html = marked.parse(block, { async: false }) as string;
+    let html = md.parse(block, { async: false }) as string;
     if (fragmentReveals) {
       html = applyFragmentReveals(html);
     }
@@ -198,10 +205,27 @@ export async function buildDeck(opts: BuildOpts): Promise<BuildResult> {
   } catch {
     // theme file missing — engine still produces a valid (unstyled) deck
   }
+  if (opts.customCssPath) {
+    const customCss = await readFile(opts.customCssPath, 'utf8');
+    deckmarkTheme += `\n${customCss}`;
+  }
 
   const transition = slideTransitions ? config.transition : 'none';
-
-  const htmlDocument = `<!doctype html>
+  const revealInitScript = `window.__deckmarkReveal = Reveal;
+    Reveal.initialize({
+      hash: true,
+      controlsLayout: 'edges',
+      controlsBackArrows: 'faded',
+      transition: ${JSON.stringify(transition)},
+      center: false,
+      width: '100%',
+      height: '100%',
+      margin: 0,
+      autoAnimate: ${autoAnimate},
+      fragments: ${fragmentReveals},
+      slideNumber: ${JSON.stringify(slideNumberValue)}
+    });`;
+  const defaultHtmlDocument = `<!doctype html>
 <html lang="en" data-mode="${mode}">
 <head>
   <meta charset="utf-8">
@@ -221,23 +245,21 @@ ${sections.join('\n')}
   </div>
   <script src="${REVEAL_PREFIX}/reveal.js"></script>
   <script>
-    window.__deckmarkReveal = Reveal;
-    Reveal.initialize({
-      hash: true,
-      controlsLayout: 'edges',
-      controlsBackArrows: 'faded',
-      transition: ${JSON.stringify(transition)},
-      center: false,
-      width: '100%',
-      height: '100%',
-      margin: 0,
-      autoAnimate: ${autoAnimate},
-      fragments: ${fragmentReveals},
-      slideNumber: ${JSON.stringify(slideNumberValue)}
-    });
+    ${revealInitScript}
   </script>
 </body>
 </html>`;
+  const htmlDocument = opts.templatePath
+    ? renderTemplate(await readFile(opts.templatePath, 'utf8'), {
+      DECKMARK_MODE: mode,
+      DECKMARK_STYLE: style,
+      DECKMARK_REVEAL_PREFIX: REVEAL_PREFIX,
+      DECKMARK_BASE_THEME: baseTheme,
+      DECKMARK_THEME_CSS: deckmarkTheme,
+      DECKMARK_SLIDES: sections.join('\n'),
+      DECKMARK_REVEAL_INIT: revealInitScript
+    })
+    : defaultHtmlDocument;
 
   // Clean the build dir before each build so stale entries (especially any
   // pre-existing symlinks) can't survive a rebuild. Because rm() is
@@ -258,6 +280,30 @@ ${sections.join('\n')}
     throw new Error(
       `buildDeck: refusing to clean filesystem root as outDir: ${resolvedOutDir}`
     );
+  }
+
+  function renderTemplate(template: string, vars: Record<string, string>): string {
+    let out = template;
+    for (const [key, value] of Object.entries(vars)) {
+      out = out.replaceAll(`{{${key}}}`, value);
+    }
+    return out;
+  }
+
+  async function createMarkedRenderer(pluginPaths: string[] | undefined): Promise<Marked> {
+    const md = new Marked();
+    if (!pluginPaths?.length) return md;
+    for (const p of pluginPaths) {
+      const mod = await import(pathToFileURL(resolve(p)).href);
+      const register = typeof mod.default === 'function'
+        ? mod.default
+        : (typeof mod.register === 'function' ? mod.register : null);
+      if (!register) {
+        throw new Error(`Invalid marked plugin module at ${p}: expected default/register function`);
+      }
+      register(md);
+    }
+    return md;
   }
   const outDirWithSep = resolvedOutDir.endsWith(sep) ? resolvedOutDir : resolvedOutDir + sep;
   if (resolvedContent === resolvedOutDir || resolvedContent.startsWith(outDirWithSep)) {

@@ -74,7 +74,7 @@ If the user describes design in words, map to the three axes:
 - "smooth" / "animated" → `motion: ['slide-transitions']`
 - "build up" / "reveal one at a time" → add `'fragment-reveals'`
 
-### Style influences content, not just visuals
+### Style influences tone, not structure
 
 Write `content.md` to suit the chosen style:
 
@@ -85,6 +85,13 @@ Write `content.md` to suit the chosen style:
 - `fun` — conversational tone, friendly framing, light commentary
 
 Same content can look great in any style; tuning the prose to the personality is what makes the chosen style feel intentional.
+
+Before drafting any slides, lock the narrative first:
+
+- define audience + decision goal ("what should this deck change?")
+- agree on 3–6 core arguments
+- map a simple arc (problem → evidence → conclusion / next step)
+- assign one primary point per slide in the outline
 
 ## Annotation data shape
 
@@ -105,12 +112,14 @@ Each session also has:
 - `summary` — overall guidance from the Done dialog. Apply as a global theme, not a single change.
 - `build_hash` — sha256 of the build at review start; if it differs from a later build, selectors may be stale.
 
-## Workflow
+## Workflow (Plan → Draft → Refine)
 
 ```
 ask design (mode/style/motion) + content (audience/length)
   ↓
-init_deck → write content.md → build_deck(style, mode, motion)
+init_deck → plan storyline with user (audience/goals/core arguments/outline)
+  ↓
+write content.md from the approved outline → build_deck(style, mode, motion)
   ↓
 start_review → [user annotates in browser]
   ↓

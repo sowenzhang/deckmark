@@ -16,6 +16,9 @@ interface BuildInput {
   mode?: DeckMode;
   motion?: DeckMotion[];
   slideNumbers?: boolean | 'c' | 'c/t' | 'h.v' | 'h/v';
+  customCss?: string;
+  template?: string;
+  markedPlugins?: string[];
 }
 
 export const buildDeckTool = {
@@ -52,6 +55,19 @@ export const buildDeckTool = {
         ],
         default: false,
         description: 'Show slide numbers. true → "current / total" (e.g. 3/8). false → off. Strings are passed through to reveal.js: c = current, c/t = current/total, h.v / h/v = horizontal+vertical indices.'
+      },
+      customCss: {
+        type: 'string',
+        description: 'Optional CSS file (relative to dir) appended after built-in style theme.'
+      },
+      template: {
+        type: 'string',
+        description: 'Optional HTML template file (relative to dir) using {{DECKMARK_*}} placeholders.'
+      },
+      markedPlugins: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional local module paths (relative to dir) exporting default/register(marked) to extend markdown rendering.'
       }
     }
   },
@@ -66,7 +82,10 @@ export const buildDeckTool = {
       style: opts.style,
       mode: opts.mode,
       motion: opts.motion,
-      slideNumbers: opts.slideNumbers
+      slideNumbers: opts.slideNumbers,
+      customCssPath: opts.customCss ? resolve(cwd, opts.customCss) : undefined,
+      templatePath: opts.template ? resolve(cwd, opts.template) : undefined,
+      markedPlugins: opts.markedPlugins?.map(p => resolve(cwd, p))
     });
     return {
       out_dir: result.outDir,
