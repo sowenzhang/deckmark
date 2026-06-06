@@ -80,6 +80,7 @@ user types /deckmark:use-deckmark <topic>
         ↓
 agent asks: mode? style? motion? audience? length?
         ↓
+agent + user align on storyline outline (core argument per slide)
 agent: init_deck → writes content.md → build_deck
         ↓
 agent: start_review → "open <url>, press A to annotate, click Done"
@@ -100,7 +101,7 @@ Annotations live in `./annotations/session-<timestamp>.json` next to your deck. 
 | Tool | Purpose |
 |---|---|
 | `init_deck` | Scaffold a project (`content.md`, config, agent instructions, `.gitignore`). |
-| `build_deck` | Render `content.md` to `./build/index.html` with reveal.js. Accepts `style`/`mode`/`motion`/`slideNumbers` params. |
+| `build_deck` | Render `content.md` to `./build/index.html` with reveal.js. Accepts `style`/`mode`/`motion`/`slideNumbers` plus optional `customCss`/`template`/`markedPlugins` overrides. |
 | `start_review` | Launch the local annotation review server, return URL + session id. |
 | `wait_for_close` | Block until the user clicks "Done" in the browser, or until timeout. |
 | `get_annotations` | Read annotations from disk (works even if Done wasn't clicked). |

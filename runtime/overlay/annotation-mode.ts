@@ -7,6 +7,7 @@ import type { AnnotationInput } from '../types/session.ts';
 export function mountAnnotationMode(_root: HTMLElement): void {
   let outline: HTMLDivElement | null = null;
   let currentEl: Element | null = null;
+  let pointerDown: { x: number; y: number } | null = null;
 
   const onMouseMove = (e: MouseEvent) => {
     if (getState().mode !== 'annotating') return;
@@ -18,6 +19,12 @@ export function mountAnnotationMode(_root: HTMLElement): void {
 
   const onClick = (e: MouseEvent) => {
     if (getState().mode !== 'annotating') return;
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (pointerDown) {
+      const dx = e.clientX - pointerDown.x;
+      const dy = e.clientY - pointerDown.y;
+      if (Math.hypot(dx, dy) > 8) return;
+    }
     // If a popover is already open, do not start another annotation — the
     // popover singleton would close the first one and the user would lose
     // their in-progress comment.
@@ -30,6 +37,9 @@ export function mountAnnotationMode(_root: HTMLElement): void {
   };
 
   // capture phase so we run before reveal.js
+  document.addEventListener('pointerdown', (e) => {
+    pointerDown = { x: e.clientX, y: e.clientY };
+  }, true);
   document.addEventListener('mousemove', onMouseMove, true);
   document.addEventListener('click', onClick, true);
 
@@ -44,6 +54,8 @@ export function mountAnnotationMode(_root: HTMLElement): void {
   function pickTarget(el: Element | null): Element | null {
     if (!el) return null;
     if (el.closest('.deckmark-toolbar, .deckmark-popover, .deckmark-pin, .deckmark-done-dialog'))
+      return null;
+    if (el.closest('.controls, .progress, .slide-number, .speaker-notes, [data-prevent-swipe]'))
       return null;
     const section = el.closest('section');
     if (!section) return null;

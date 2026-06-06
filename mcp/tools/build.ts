@@ -1,5 +1,5 @@
 // mcp/tools/build.ts
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import {
   buildDeck,
   listStyles,
@@ -16,6 +16,18 @@ interface BuildInput {
   mode?: DeckMode;
   motion?: DeckMotion[];
   slideNumbers?: boolean | 'c' | 'c/t' | 'h.v' | 'h/v';
+  customCss?: string;
+  template?: string;
+  markedPlugins?: string[];
+}
+
+function resolveWithinDir(dir: string, filePath: string, label: string): string {
+  const resolved = resolve(dir, filePath);
+  const rel = relative(dir, resolved);
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error(`${label} must be relative to dir`);
+  }
+  return resolved;
 }
 
 export const buildDeckTool = {
@@ -52,6 +64,19 @@ export const buildDeckTool = {
         ],
         default: false,
         description: 'Show slide numbers. true → "current / total" (e.g. 3/8). false → off. Strings are passed through to reveal.js: c = current, c/t = current/total, h.v / h/v = horizontal+vertical indices.'
+      },
+      customCss: {
+        type: 'string',
+        description: 'Optional CSS file (relative to dir) appended after built-in style theme.'
+      },
+      template: {
+        type: 'string',
+        description: 'Optional HTML template file (relative to dir) using {{DECKMARK_*}} placeholders.'
+      },
+      markedPlugins: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional local module paths (relative to dir) exporting default/register(marked) to extend markdown rendering.'
       }
     }
   },
@@ -66,7 +91,10 @@ export const buildDeckTool = {
       style: opts.style,
       mode: opts.mode,
       motion: opts.motion,
-      slideNumbers: opts.slideNumbers
+      slideNumbers: opts.slideNumbers,
+      customCssPath: opts.customCss ? resolveWithinDir(cwd, opts.customCss, 'customCss') : undefined,
+      templatePath: opts.template ? resolveWithinDir(cwd, opts.template, 'template') : undefined,
+      markedPlugins: opts.markedPlugins?.map(p => resolveWithinDir(cwd, p, 'markedPlugins'))
     });
     return {
       out_dir: result.outDir,
