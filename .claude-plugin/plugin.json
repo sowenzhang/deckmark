@@ -1,7 +1,7 @@
 {
   "name": "deckmark",
   "description": "In-browser annotation for AI-generated presentations. Build a deck with your agent, click directly on elements to leave change requests, and the agent applies them — no screenshots, no back-and-forth.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "sowenzhang",
     "url": "https://github.com/sowenzhang"
