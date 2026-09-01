@@ -32,6 +32,10 @@ export async function buildHash(dir: string): Promise<string> {
   return `sha256:${hash.digest('hex')}`;
 }
 
+export function dataHash(data: string | Buffer): string {
+  return `sha256:${createHash('sha256').update(data).digest('hex')}`;
+}
+
 export function contentHash(content: string): string {
-  return `sha256:${createHash('sha256').update(content, 'utf8').digest('hex')}`;
+  return dataHash(content);
 }

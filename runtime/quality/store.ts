@@ -54,6 +54,7 @@ function validateQualityReport(value: unknown): QualityReport {
     report.content_file.length === 0 ||
     typeof report.content_hash !== 'string' ||
     typeof report.brief_hash !== 'string' ||
+    typeof report.packet_hash !== 'string' ||
     typeof report.target !== 'number' ||
     typeof report.iteration !== 'number' ||
     typeof report.overall_score !== 'number' ||
@@ -65,6 +66,7 @@ function validateQualityReport(value: unknown): QualityReport {
     (report.reviewer.method !== 'different-model' && report.reviewer.method !== 'cold-self-review') ||
     typeof report.reviewer.independent !== 'boolean' ||
     !Array.isArray(report.artifacts) ||
+    report.artifacts.some(artifact => typeof artifact.sha256 !== 'string') ||
     !Array.isArray(report.floor_failures) ||
     !Array.isArray(report.deterministic_findings) ||
     !Array.isArray(report.critic_findings) ||

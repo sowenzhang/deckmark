@@ -40,7 +40,8 @@ export const RUBRIC: DimensionDefinition[] = [
 ];
 
 function priority(value: unknown): QualityPriority {
-  return value === 'P1' || value === 'P2' || value === 'P3' ? value : 'P2';
+  if (value === 'P1' || value === 'P2' || value === 'P3') return value;
+  throw new Error('critic finding priority must be P1, P2, or P3');
 }
 
 function category(value: unknown): CriticSubmission['findings'][number]['category'] {
@@ -55,7 +56,7 @@ function category(value: unknown): CriticSubmission['findings'][number]['categor
     case 'visual':
       return value;
     default:
-      return 'visual';
+      throw new Error('critic finding category is invalid');
   }
 }
 
@@ -67,7 +68,7 @@ function score(value: unknown, dimension: string): number {
 }
 
 export function validateCriticSubmission(value: unknown): CriticSubmission {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('critique must be an object');
   }
   const raw = value as Record<string, unknown>;
@@ -79,67 +80,94 @@ export function validateCriticSubmission(value: unknown): CriticSubmission {
     QUALITY_DIMENSIONS.map(key => [key, score(rawScores[key], key)])
   ) as unknown as CriticSubmission['scores'];
 
-  const findings = Array.isArray(raw.findings)
-    ? raw.findings.map((item, index) => {
-        if (!item || typeof item !== 'object') throw new Error(`critique.findings[${index}] must be an object`);
-        const finding = item as Record<string, unknown>;
-        if (typeof finding.message !== 'string' || typeof finding.suggested_fix !== 'string') {
-          throw new Error(`critique.findings[${index}] requires message and suggested_fix`);
-        }
-        return {
-          priority: priority(finding.priority),
-          category: category(finding.category),
-          message: finding.message,
-          suggested_fix: finding.suggested_fix,
-          slide_index: typeof finding.slide_index === 'number' ? finding.slide_index : undefined,
-          prompted: typeof finding.prompted === 'boolean' ? finding.prompted : undefined,
-          confidence: typeof finding.confidence === 'number' ? finding.confidence : undefined
-        };
-      })
-    : [];
+  if (!Array.isArray(raw.findings)) {
+    throw new Error('critique.findings must be an array');
+  }
+  const findings = raw.findings.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`critique.findings[${index}] must be an object`);
+    }
+    const finding = item as Record<string, unknown>;
+    if (typeof finding.message !== 'string' || typeof finding.suggested_fix !== 'string') {
+      throw new Error(`critique.findings[${index}] requires message and suggested_fix`);
+    }
+    if (typeof finding.prompted !== 'boolean') {
+      throw new Error(`critique.findings[${index}].prompted must be a boolean`);
+    }
+    if (
+      finding.confidence !== undefined &&
+      (
+        typeof finding.confidence !== 'number' ||
+        !Number.isFinite(finding.confidence) ||
+        finding.confidence < 0 ||
+        finding.confidence > 10
+      )
+    ) {
+      throw new Error(`critique.findings[${index}].confidence must be a number from 0 to 10`);
+    }
+    return {
+      priority: priority(finding.priority),
+      category: category(finding.category),
+      message: finding.message,
+      suggested_fix: finding.suggested_fix,
+      slide_index: typeof finding.slide_index === 'number' ? finding.slide_index : undefined,
+      prompted: finding.prompted,
+      confidence: typeof finding.confidence === 'number' ? finding.confidence : undefined
+    };
+  });
 
-  const audienceReception = Array.isArray(raw.audience_reception)
-    ? raw.audience_reception.map((item, index) => {
-        if (!item || typeof item !== 'object') {
-          throw new Error(`critique.audience_reception[${index}] must be an object`);
-        }
-        const reception = item as Record<string, unknown>;
-        for (const field of ['persona', 'comprehension', 'likely_reaction', 'remembered_message', 'action_clarity']) {
-          if (typeof reception[field] !== 'string') {
-            throw new Error(`critique.audience_reception[${index}].${field} is required`);
-          }
-        }
-        return {
-          persona: reception.persona as string,
-          comprehension: reception.comprehension as string,
-          likely_reaction: reception.likely_reaction as string,
-          remembered_message: reception.remembered_message as string,
-          objection: typeof reception.objection === 'string' ? reception.objection : undefined,
-          action_clarity: reception.action_clarity as string
-        };
-      })
-    : [];
+  if (!Array.isArray(raw.audience_reception)) {
+    throw new Error('critique.audience_reception must be an array');
+  }
+  const audienceReception = raw.audience_reception.map((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`critique.audience_reception[${index}] must be an object`);
+    }
+    const reception = item as Record<string, unknown>;
+    for (const field of ['persona', 'comprehension', 'likely_reaction', 'remembered_message', 'action_clarity']) {
+      if (typeof reception[field] !== 'string') {
+        throw new Error(`critique.audience_reception[${index}].${field} is required`);
+      }
+    }
+    return {
+      persona: reception.persona as string,
+      comprehension: reception.comprehension as string,
+      likely_reaction: reception.likely_reaction as string,
+      remembered_message: reception.remembered_message as string,
+      objection: typeof reception.objection === 'string' ? reception.objection : undefined,
+      action_clarity: reception.action_clarity as string
+    };
+  });
   if (audienceReception.length < 3) {
     throw new Error('critique.audience_reception requires at least three audience perspectives');
   }
 
-  if (!raw.reviewer || typeof raw.reviewer !== 'object') {
+  if (!raw.reviewer || typeof raw.reviewer !== 'object' || Array.isArray(raw.reviewer)) {
     throw new Error('critique.reviewer is required');
   }
   const rawReviewer = raw.reviewer as Record<string, unknown>;
-  const method = rawReviewer.method === 'different-model' ? 'different-model' : 'cold-self-review';
+  if (rawReviewer.method !== 'different-model' && rawReviewer.method !== 'cold-self-review') {
+    throw new Error('critique.reviewer.method must be different-model or cold-self-review');
+  }
+  if (typeof rawReviewer.independent !== 'boolean') {
+    throw new Error('critique.reviewer.independent must be a boolean');
+  }
+  const method = rawReviewer.method;
   const reviewer = {
-    independent: rawReviewer.independent === true,
+    independent: rawReviewer.independent,
     method,
     model: typeof rawReviewer.model === 'string' ? rawReviewer.model : undefined
   } satisfies CriticSubmission['reviewer'];
+  if (typeof raw.summary !== 'string') {
+    throw new Error('critique.summary must be a string');
+  }
 
   return {
     reviewer,
     scores,
     findings,
     audience_reception: audienceReception,
-    summary: typeof raw.summary === 'string' ? raw.summary : ''
+    summary: raw.summary
   };
 }
 

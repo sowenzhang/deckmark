@@ -22,7 +22,7 @@ You should already have access to these via the deckmark MCP server (`@deckmark`
 1. Fill `deckmark.brief.json` with the audience, purpose, key takeaway, desired action, visual direction, motion intent, and narrative arc.
 2. Edit `content.md` to reflect the outline. Slides are separated by `---` on its own line. Use message-led markdown headings (`#`) for slide titles.
 3. Call **`build_deck`** with `{ dir: "<this-project-dir>", style, mode, motion, motion_style }` to render to `./build/index.html`.
-4. Call **`audit_deck`** without a critique. Fix deterministic blockers, save requested rendered evidence under `.deckmark/artifacts/`, and send the returned critic prompt to a different-model reviewer when supported. Call `audit_deck` again with the structured critique, returned `run_id`, and returned `build_hash` as `prepared_build_hash`.
+4. Call **`audit_deck`** without a critique. Fix deterministic blockers, save requested PNG evidence under `.deckmark/artifacts/`, then call `audit_deck` again with those artifacts to prepare the exact critic packet. Send that prompt to a different-model reviewer when supported, then submit the structured critique with the returned `run_id`, `build_hash` as `prepared_build_hash`, and `packet_hash` as `prepared_packet_hash`.
 5. Call **`start_review`** with `{ dir: "<this-project-dir>" }` to open the accepted or advisory deck in the browser with the annotation overlay injected. Tell the user the URL it returns.
 6. Wait for the user to come back.
 7. Call **`get_annotations`** with `{ dir: "<this-project-dir>", format: "md" }` to read the feedback.
@@ -38,7 +38,7 @@ deckmark has a 3-axis design system:
 - **`motion`** (multi-select array): `slide-transitions` (default), `fragment-reveals`, `auto-animate`. Pass `[]` for no global motion; per-slide directives can still opt selected slides into motion.
 - **`motion_style`**: `subtle` (default), `engaging`, or `cinematic`. Motion should direct attention or explain change, not decorate every slide.
 
-Use a per-slide directive for selected motion moments: `<!-- deckmark: transition=slide fragments=engaging auto-animate -->`. Supported transitions are `none`, `fade`, `slide`, `zoom`, `convex`, and `concave`; fragments accept `none`, `subtle`, `engaging`, or `cinematic`.
+Use a leading per-slide directive for selected motion moments: `<!-- deckmark: transition=slide fragments=engaging auto-animate -->`. Supported transitions are `none`, `fade`, `slide`, `zoom`, `convex`, and `concave`; fragments accept `none`, `subtle`, `engaging`, or `cinematic`. `auto-animate` applies to the transition from the previous slide into that slide.
 
 ## Quality gate
 

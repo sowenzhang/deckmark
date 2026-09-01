@@ -121,7 +121,7 @@ Three orthogonal axes:
 
 Enabled motion also accepts a character: `subtle`, `engaging`, or `cinematic`. The agent can accept free-form descriptions ("Stripe Press feel, dark, progressively reveal the decision") and map them to these controls.
 
-Selected slides can override global motion with a Markdown comment such as `<!-- deckmark: transition=slide fragments=engaging auto-animate -->`. This makes it possible to keep most of a deck restrained while giving an important comparison, reveal, or transformation a deliberate motion beat. These overrides still count as motion in the quality audit.
+Selected slides can override global motion with a leading Markdown comment such as `<!-- deckmark: transition=slide fragments=engaging auto-animate -->`. This makes it possible to keep most of a deck restrained while giving an important comparison, reveal, or transformation a deliberate motion beat. `auto-animate` applies to the transition from the previous slide into the directive's slide. These overrides still count as motion in the quality audit.
 
 ### Deck quality gate
 
@@ -137,7 +137,7 @@ Deckmark defines a beautiful deck as:
 - **Meaningful** — visuals and motion clarify the argument rather than decorate it.
 - **Polished** — construction details do not distract from the message.
 
-The critic also scores slide-to-slide logic, audience fit, credibility, memorability, and action clarity. It simulates a representative audience member, a skeptic, and a decision-maker. Rendered evidence is captured after the current build and kept under `.deckmark/artifacts/`, outside publishable output. Source content, rendered build, critic packet, screenshots, report, and publish are tied together by hashes and freshness checks. The default quality mode is advisory. Optional blocking mode requires rendered screenshot coverage and an honestly reported independent reviewer, and prevents publishing when the accepted report is missing, rejected, or stale. Deckmark records reviewer metadata but cannot independently prove which model the host dispatched.
+The critic also scores slide-to-slide logic, audience fit, credibility, memorability, and action clarity. It simulates a representative audience member, a skeptic, and a decision-maker. Rendered PNG evidence is decoded, dimension-checked, captured after the current build, and kept under `.deckmark/artifacts/`, outside publishable output. Source content, brief, rendered build, deterministic findings, artifact bytes, critic packet, report, and publish are tied together by hashes and freshness checks. The default quality mode is advisory. Optional blocking mode requires rendered screenshot coverage and an honestly reported independent reviewer, and prevents publishing when the accepted report is missing, rejected, or stale. Deckmark records reviewer metadata but cannot independently prove which model the host dispatched.
 
 ---
 

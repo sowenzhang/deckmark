@@ -15,6 +15,68 @@ const REQUIRED_FIELDS: Array<{ path: string; value: (brief: DeckBrief) => unknow
   { path: 'narrative_arc', value: brief => brief.narrative_arc }
 ];
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function validateOptionalString(record: Record<string, unknown>, field: string): void {
+  if (record[field] !== undefined && typeof record[field] !== 'string') {
+    throw new Error(`${BRIEF_FILENAME}: ${field} must be a string`);
+  }
+}
+
+function validateDeckBrief(value: unknown): DeckBrief {
+  if (!isObject(value)) {
+    throw new Error(`${BRIEF_FILENAME} must contain a JSON object`);
+  }
+  if (value.schema !== undefined && value.schema !== 'deckmark/brief/v1') {
+    throw new Error(`${BRIEF_FILENAME}: schema must be deckmark/brief/v1`);
+  }
+  for (const field of [
+    'setting', 'purpose', 'key_takeaway', 'desired_action', 'tone',
+    'visual_direction', 'motion_intent', 'narrative_arc'
+  ]) {
+    validateOptionalString(value, field);
+  }
+  if (value.audience !== undefined) {
+    if (!isObject(value.audience)) {
+      throw new Error(`${BRIEF_FILENAME}: audience must be an object`);
+    }
+    validateOptionalString(value.audience, 'description');
+    validateOptionalString(value.audience, 'familiarity');
+    for (const field of ['needs', 'objections']) {
+      const list = value.audience[field];
+      if (list !== undefined && (!Array.isArray(list) || list.some(item => typeof item !== 'string'))) {
+        throw new Error(`${BRIEF_FILENAME}: audience.${field} must be an array of strings`);
+      }
+    }
+  }
+  if (value.quality !== undefined) {
+    if (!isObject(value.quality)) {
+      throw new Error(`${BRIEF_FILENAME}: quality must be an object`);
+    }
+    if (
+      value.quality.mode !== undefined &&
+      value.quality.mode !== 'advisory' &&
+      value.quality.mode !== 'blocking'
+    ) {
+      throw new Error(`${BRIEF_FILENAME}: quality.mode must be advisory or blocking`);
+    }
+    if (
+      value.quality.target !== undefined &&
+      (
+        typeof value.quality.target !== 'number' ||
+        !Number.isFinite(value.quality.target) ||
+        value.quality.target < 1 ||
+        value.quality.target > 10
+      )
+    ) {
+      throw new Error(`${BRIEF_FILENAME}: quality.target must be a number from 1 to 10`);
+    }
+  }
+  return value as DeckBrief;
+}
+
 export async function readDeckBrief(deckDir: string): Promise<{
   brief: DeckBrief;
   briefHash: string;
@@ -37,12 +99,13 @@ export async function readDeckBrief(deckDir: string): Promise<{
     throw err;
   }
 
-  let brief: DeckBrief;
+  let parsed: unknown;
   try {
-    brief = JSON.parse(raw) as DeckBrief;
+    parsed = JSON.parse(raw);
   } catch {
     throw new Error(`${BRIEF_FILENAME} is not valid JSON`);
   }
+  const brief = validateDeckBrief(parsed);
 
   const missing = REQUIRED_FIELDS
     .filter(field => {

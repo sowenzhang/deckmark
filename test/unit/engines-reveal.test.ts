@@ -217,6 +217,7 @@ Start without motion.
   const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
   assert.match(html, /data-slide-title="Quiet opening"[^>]+data-transition="none"/);
   assert.match(html, /data-slide-title="Build the decision"[^>]+data-auto-animate[^>]+data-transition="slide"/);
+  assert.equal((html.match(/data-auto-animate/g) ?? []).length, 2);
   assert.match(html, /dm-fragment-engaging/);
   assert.match(html, /data-deckmark-motion="slide-transitions,fragment-reveals,auto-animate"/);
   assert.match(html, /data-deckmark-content-hash="sha256:[a-f0-9]{64}"/);
@@ -226,6 +227,27 @@ Start without motion.
   assert.match(html, /autoAnimate:\s*true/);
   assert.match(html, /fragments:\s*true/);
   assert.doesNotMatch(html, /deckmark:\s*transition/);
+  await rm(dir, { recursive: true });
+});
+
+test('buildDeck ignores deckmark directive examples inside fenced code', async () => {
+  const dir = await tmpDir();
+  const content = `# Directive documentation
+
+\`\`\`html
+<!-- deckmark: transition=zoom fragments=cinematic auto-animate -->
+\`\`\`
+`;
+  await writeFile(join(dir, 'content.md'), content);
+  await buildDeck({
+    contentPath: join(dir, 'content.md'),
+    outDir: join(dir, 'build'),
+    motion: []
+  });
+  const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
+  assert.match(html, /data-deckmark-motion=""/);
+  assert.doesNotMatch(html, /data-transition="zoom"/);
+  assert.match(html, /&lt;!-- deckmark: transition=zoom/);
   await rm(dir, { recursive: true });
 });
 

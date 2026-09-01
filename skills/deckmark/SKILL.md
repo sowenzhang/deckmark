@@ -69,7 +69,7 @@ For a specific high-value slide, add a source directive instead of making the wh
 <!-- deckmark: transition=slide fragments=engaging auto-animate -->
 ```
 
-Supported values are `transition=none|fade|slide|zoom|convex|concave`, `fragments=none|subtle|engaging|cinematic`, and `auto-animate` or `auto-animate=false`. Prefer one or two intentional motion moments over constant novelty.
+Supported values are `transition=none|fade|slide|zoom|convex|concave`, `fragments=none|subtle|engaging|cinematic`, and `auto-animate` or `auto-animate=false`. An `auto-animate` directive applies to the transition from the previous slide into the directive's slide, so deckmark marks the adjacent pair. Prefer one or two intentional motion moments over constant novelty.
 
 ### slideNumbers (optional)
 
@@ -134,10 +134,10 @@ After the first build:
 
 1. Call `audit_deck` without `critique`. Read its deterministic findings, screenshot plan, critic prompt, and response schema.
 2. Fix obvious P1 issues before paying for an independent review.
-3. When browser or screenshot tooling is available, capture every settled slide **after the current build completes**. For fragments or auto-animate, also capture the most important before/after pair. Save artifacts under `.deckmark/artifacts/`; other locations are rejected so review evidence cannot leak into published output.
+3. When browser or screenshot tooling is available, capture every settled slide as PNG **after the current build completes**. For fragments or auto-animate, also capture the most important before/after pair. Save artifacts under `.deckmark/artifacts/`; other locations are rejected so review evidence cannot leak into published output.
 4. Dispatch the returned critic prompt **once per quality pass** to a read-only reviewer on a model different from the builder when the host supports it. Prime the reviewer with the supplied deterministic hypotheses; do not merely say "review this deck."
 5. If a different-model reviewer is unavailable, perform a cold self-review and report `reviewer.independent: false`. This is allowed in advisory mode but cannot satisfy blocking mode.
-6. Call `audit_deck` again with `critique`, `artifacts`, the returned `run_id` and `build_hash` as `prepared_build_hash`, and `iteration` (`1` through `3`). Reuse the same `run_id` across revision passes.
+6. Call `audit_deck` again with `critique`, `artifacts`, the returned `run_id`, `build_hash` as `prepared_build_hash`, `packet_hash` as `prepared_packet_hash`, and `iteration` (`1` through `3`). Reuse the same `run_id` across revision passes. If the brief, deterministic findings, artifact metadata, or screenshot bytes change after preparation, prepare a new packet before submitting the critique.
 7. On `revise`, fix only blocking findings first, rebuild, and capture a fresh static set for the rebuilt deck plus the affected motion states. Stop when accepted or when `stop.stop` reports `cap`, `plateau`, or `regression`.
 8. Only after the quality pass, start the user's annotation review. Human feedback remains the final authority.
 

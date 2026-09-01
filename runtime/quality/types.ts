@@ -75,6 +75,7 @@ export interface CriticSubmission {
 
 export interface ScreenshotArtifact {
   path: string;
+  sha256?: string;
   slide_index?: number;
   state?: 'static' | 'fragment-before' | 'fragment-after' | 'auto-animate-before' | 'auto-animate-after';
   viewport?: string;
@@ -89,6 +90,7 @@ export interface QualityReport {
   content_file: string;
   content_hash: string;
   brief_hash: string;
+  packet_hash: string;
   mode: QualityMode;
   target: number;
   iteration: number;

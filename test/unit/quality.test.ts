@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { PNG } from 'pngjs';
 import { buildDeck } from '../../runtime/engines/reveal.ts';
 import { analyzeDeckContent, inspectBuildDesign } from '../../runtime/quality/analyze.ts';
 import {
@@ -13,12 +14,15 @@ import {
 } from '../../runtime/quality/rubric.ts';
 import { auditDeckTool } from '../../mcp/tools/audit.ts';
 import { publishDeckTool } from '../../mcp/tools/publish.ts';
+import { readDeckBrief } from '../../runtime/quality/brief.ts';
 import type { CriticSubmission, DeckBrief } from '../../runtime/quality/types.ts';
 
-function fakePng(): Buffer {
-  const data = Buffer.alloc(128);
-  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(data);
-  return data;
+function fakePng(fill = 0): Buffer {
+  const png = new PNG({ width: 16, height: 16 });
+  for (let index = 0; index < png.data.length; index += 1) {
+    png.data[index] = (index + fill) % 256;
+  }
+  return PNG.sync.write(png);
 }
 
 const COMPLETE_BRIEF: DeckBrief = {
@@ -243,6 +247,47 @@ test('critic validation requires honest reviewer metadata', () => {
   );
 });
 
+test('critic validation rejects malformed priorities and missing findings', () => {
+  const valid = highCritique();
+  assert.throws(
+    () => validateCriticSubmission({
+      ...valid,
+      findings: [{
+        priority: 'P1 ',
+        category: 'narrative',
+        message: 'Malformed blocker',
+        suggested_fix: 'Fix it',
+        prompted: false
+      }]
+    }),
+    /priority must be P1, P2, or P3/i
+  );
+  const withoutFindings = { ...valid } as Record<string, unknown>;
+  delete withoutFindings.findings;
+  assert.throws(
+    () => validateCriticSubmission(withoutFindings),
+    /findings must be an array/i
+  );
+});
+
+test('brief validation rejects invalid shapes and quality modes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'deckmark-brief-validation-'));
+  await writeFile(join(dir, 'deckmark.brief.json'), 'null');
+  await assert.rejects(
+    () => readDeckBrief(dir),
+    /must contain a JSON object/i
+  );
+  await writeFile(
+    join(dir, 'deckmark.brief.json'),
+    JSON.stringify({ ...COMPLETE_BRIEF, quality: { mode: 'blockng', target: 8 } })
+  );
+  await assert.rejects(
+    () => readDeckBrief(dir),
+    /quality\.mode must be advisory or blocking/i
+  );
+  await rm(dir, { recursive: true });
+});
+
 test('audit_deck prepares a critic packet and persists an advisory verdict', async () => {
   const dir = await setupDeck();
   const prepared = await auditDeckTool.handler({ dir }) as Record<string, unknown>;
@@ -255,6 +300,7 @@ test('audit_deck prepares a critic packet and persists an advisory verdict', asy
     dir,
     run_id: prepared.run_id,
     prepared_build_hash: prepared.build_hash,
+    prepared_packet_hash: prepared.packet_hash,
     critique: highCritique()
   }) as Record<string, unknown>;
   assert.equal(completed.status, 'accept');
@@ -275,6 +321,7 @@ test('blocking quality mode requires screenshot evidence and an accepted current
     dir,
     run_id: noEvidencePrepared.run_id,
     prepared_build_hash: noEvidencePrepared.build_hash,
+    prepared_packet_hash: noEvidencePrepared.packet_hash,
     critique: highCritique()
   }) as Record<string, unknown>;
   assert.equal(noEvidence.status, 'revise');
@@ -298,6 +345,7 @@ test('blocking quality mode requires screenshot evidence and an accepted current
     artifacts,
     run_id: acceptedPrepared.run_id,
     prepared_build_hash: acceptedPrepared.build_hash,
+    prepared_packet_hash: acceptedPrepared.packet_hash,
     critique: highCritique()
   }) as Record<string, unknown>;
   assert.equal(accepted.status, 'accept');
@@ -360,6 +408,7 @@ test('blocking publish rejects a brief changed after the accepted audit', async 
     artifacts,
     run_id: prepared.run_id,
     prepared_build_hash: prepared.build_hash,
+    prepared_packet_hash: prepared.packet_hash,
     critique: highCritique()
   });
   await writeFile(
@@ -407,6 +456,46 @@ test('audit rejects edited source that has not been rebuilt', async () => {
   await rm(dir, { recursive: true });
 });
 
+test('audit rejects out-of-range artifact slide indices', async () => {
+  const dir = await setupDeck();
+  await mkdir(join(dir, '.deckmark', 'artifacts'), { recursive: true });
+  await writeFile(join(dir, '.deckmark', 'artifacts', 'bad-index.png'), fakePng());
+  await assert.rejects(
+    () => auditDeckTool.handler({
+      dir,
+      artifacts: [{
+        path: '.deckmark/artifacts/bad-index.png',
+        state: 'static',
+        slide_index: 99
+      }]
+    }),
+    /slide_index must be an integer from 0 to 3/i
+  );
+  await rm(dir, { recursive: true });
+});
+
+test('critique packet is invalidated when screenshot bytes change after preparation', async () => {
+  const dir = await setupDeck();
+  await mkdir(join(dir, '.deckmark', 'artifacts'), { recursive: true });
+  const path = join(dir, '.deckmark', 'artifacts', 'changing.png');
+  await writeFile(path, fakePng(1));
+  const artifacts = [{ path: '.deckmark/artifacts/changing.png', state: 'static' as const, slide_index: 0 }];
+  const prepared = await auditDeckTool.handler({ dir, artifacts }) as Record<string, unknown>;
+  await writeFile(path, fakePng(255));
+  await assert.rejects(
+    () => auditDeckTool.handler({
+      dir,
+      artifacts,
+      run_id: prepared.run_id,
+      prepared_build_hash: prepared.build_hash,
+      prepared_packet_hash: prepared.packet_hash,
+      critique: highCritique()
+    }),
+    /screenshot evidence changed after preparation/i
+  );
+  await rm(dir, { recursive: true });
+});
+
 test('quality loop stops on a plateau instead of iterating without a bound', async () => {
   const dir = await setupDeck();
   const low = highCritique();
@@ -416,6 +505,7 @@ test('quality loop stops on a plateau instead of iterating without a bound', asy
     dir,
     run_id: prepared.run_id,
     prepared_build_hash: prepared.build_hash,
+    prepared_packet_hash: prepared.packet_hash,
     critique: low,
     iteration: 1
   }) as { stop: { stop: boolean } };
@@ -425,6 +515,7 @@ test('quality loop stops on a plateau instead of iterating without a bound', asy
     dir,
     run_id: prepared.run_id,
     prepared_build_hash: prepared.build_hash,
+    prepared_packet_hash: prepared.packet_hash,
     critique: low,
     iteration: 2
   }) as { stop: { stop: boolean; reason: string } };
@@ -444,6 +535,7 @@ test('quality loop does not call a meaningful audience-score improvement a plate
     dir,
     run_id: prepared.run_id,
     prepared_build_hash: prepared.build_hash,
+    prepared_packet_hash: prepared.packet_hash,
     critique: firstCritique,
     iteration: 1
   });
@@ -454,6 +546,7 @@ test('quality loop does not call a meaningful audience-score improvement a plate
     dir,
     run_id: prepared.run_id,
     prepared_build_hash: prepared.build_hash,
+    prepared_packet_hash: prepared.packet_hash,
     critique: improvedCritique,
     iteration: 2
   }) as { score_delta: number; stop: { stop: boolean; reason: string | null } };
@@ -479,6 +572,7 @@ test('critique cannot certify a build different from the prepared critic packet'
       dir,
       run_id: prepared.run_id,
       prepared_build_hash: prepared.build_hash,
+      prepared_packet_hash: prepared.packet_hash,
       critique: highCritique()
     }),
     /changed after the critic packet was prepared/i

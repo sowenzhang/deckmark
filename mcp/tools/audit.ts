@@ -1,7 +1,8 @@
 import { lstat, readFile, realpath, stat } from 'node:fs/promises';
 import { extname, relative, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { buildHash, contentHash } from '../../runtime/store/build-hash.ts';
+import { PNG } from 'pngjs';
+import { buildHash, contentHash, dataHash } from '../../runtime/store/build-hash.ts';
 import { analyzeDeckContent, inspectBuildDesign } from '../../runtime/quality/analyze.ts';
 import { readDeckBrief, qualityMode, qualityTarget } from '../../runtime/quality/brief.ts';
 import {
@@ -23,26 +24,11 @@ interface AuditInput {
   iteration?: number;
   run_id?: string;
   prepared_build_hash?: string;
+  prepared_packet_hash?: string;
 }
 
 function isUnder(root: string, candidate: string): boolean {
   return candidate === root || candidate.startsWith(root + sep);
-}
-
-function hasImageSignature(data: Buffer, extension: string): boolean {
-  if (extension === '.png') {
-    return data.length >= 8 &&
-      data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-  }
-  if (extension === '.jpg' || extension === '.jpeg') {
-    return data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
-  }
-  if (extension === '.webp') {
-    return data.length >= 12 &&
-      data.subarray(0, 4).toString('ascii') === 'RIFF' &&
-      data.subarray(8, 12).toString('ascii') === 'WEBP';
-  }
-  return false;
 }
 
 async function normalizeArtifacts(
@@ -78,8 +64,8 @@ async function normalizeArtifacts(
       throw new Error(`artifact path must stay inside .deckmark/artifacts/: ${artifact.path}`);
     }
     const extension = extname(path).toLowerCase();
-    if (!['.png', '.jpg', '.jpeg', '.webp'].includes(extension)) {
-      throw new Error(`artifact must be a PNG, JPEG, or WebP image: ${artifact.path}`);
+    if (extension !== '.png') {
+      throw new Error(`artifact must be a PNG screenshot: ${artifact.path}`);
     }
     if (unresolved.size < 100) {
       throw new Error(`artifact is too small to be a screenshot: ${artifact.path}`);
@@ -87,16 +73,63 @@ async function normalizeArtifacts(
     if (unresolved.mtimeMs < buildStat.mtimeMs) {
       throw new Error(`artifact predates the current build; capture it again: ${artifact.path}`);
     }
-    const signature = (await readFile(canonical)).subarray(0, 12);
-    if (!hasImageSignature(signature, extension)) {
-      throw new Error(`artifact does not contain a valid image signature: ${artifact.path}`);
+    const bytes = await readFile(canonical);
+    let decoded: PNG;
+    try {
+      decoded = PNG.sync.read(bytes);
+    } catch {
+      throw new Error(`artifact is not a decodable PNG screenshot: ${artifact.path}`);
+    }
+    if (decoded.width < 1 || decoded.height < 1) {
+      throw new Error(`artifact has invalid dimensions: ${artifact.path}`);
     }
     artifacts.push({
       ...artifact,
+      sha256: dataHash(bytes),
       path: `.deckmark/artifacts/${relative(root, canonical).replace(/\\/g, '/')}`
     });
   }
-  return artifacts;
+  return artifacts.sort((a, b) =>
+    `${a.path}:${a.slide_index ?? ''}:${a.state ?? ''}`.localeCompare(
+      `${b.path}:${b.slide_index ?? ''}:${b.state ?? ''}`
+    )
+  );
+}
+
+function validateSlideIndices(
+  artifacts: ScreenshotArtifact[],
+  slideCount: number
+): void {
+  for (const artifact of artifacts) {
+    if (
+      artifact.slide_index !== undefined &&
+      (
+        !Number.isInteger(artifact.slide_index) ||
+        artifact.slide_index < 0 ||
+        artifact.slide_index >= slideCount
+      )
+    ) {
+      throw new Error(
+        `artifact slide_index must be an integer from 0 to ${slideCount - 1}: ${artifact.path}`
+      );
+    }
+  }
+}
+
+function packetHash(opts: {
+  buildHash: string;
+  contentDigest: string;
+  briefHash: string;
+  findings: QualityFinding[];
+  artifacts: ScreenshotArtifact[];
+}): string {
+  return contentHash(JSON.stringify({
+    build_hash: opts.buildHash,
+    content_hash: opts.contentDigest,
+    brief_hash: opts.briefHash,
+    deterministic_findings: opts.findings,
+    artifacts: opts.artifacts
+  }));
 }
 
 function screenshotPlan(slideCount: number, hasFragments: boolean, hasAutoAnimate: boolean): object {
@@ -106,7 +139,7 @@ function screenshotPlan(slideCount: number, hasFragments: boolean, hasAutoAnimat
       'Capture every slide after fonts and images settle at a presentation viewport such as 1440x900.',
       'Prefer one representative overview or contact sheet plus full-size captures for visually important or questionable slides.',
       'Capture paired before/after states only where fragments or auto-animate carry meaning.',
-      'Save screenshots under .deckmark/artifacts/ and pass those paths back through artifacts; advisory mode may proceed without screenshots with reduced confidence.'
+      'Save PNG screenshots under .deckmark/artifacts/ and pass those paths back through artifacts; advisory mode may proceed without screenshots with reduced confidence.'
     ],
     expected_static_slides: slideCount,
     fragment_state_pairs: hasFragments ? 'capture the most important staged reveal' : 'not required',
@@ -186,13 +219,13 @@ export const auditDeckTool = {
       content: { type: 'string', description: 'Content file name (defaults to content.md)' },
       artifacts: {
         type: 'array',
-        description: 'Optional repository-local screenshots. Required for a high-confidence blocking verdict.',
+        description: 'Optional repository-local PNG screenshots. Required for a high-confidence blocking verdict.',
         items: {
           type: 'object',
           required: ['path'],
           properties: {
             path: { type: 'string' },
-            slide_index: { type: 'number' },
+            slide_index: { type: 'integer', minimum: 0 },
             state: {
               type: 'string',
               enum: ['static', 'fragment-before', 'fragment-after', 'auto-animate-before', 'auto-animate-after']
@@ -213,6 +246,10 @@ export const auditDeckTool = {
       prepared_build_hash: {
         type: 'string',
         description: 'Build hash returned by the preparation call. Required with critique so the verdict cannot certify a different build.'
+      },
+      prepared_packet_hash: {
+        type: 'string',
+        description: 'Packet hash returned by the preparation call. Required with critique so brief, findings, and screenshot bytes cannot change after review.'
       },
       iteration: {
         type: 'integer',
@@ -252,6 +289,7 @@ export const auditDeckTool = {
       ? opts.run_id.trim()
       : randomUUID();
     const slideCount = content.split(/^\s*---\s*$/m).map(block => block.trim()).filter(Boolean).length;
+    validateSlideIndices(artifacts, slideCount);
     const findings = analyzeDeckContent(content, briefResult.brief, briefResult.missing, design);
     const mode = qualityMode(briefResult.brief);
     const target = qualityTarget(briefResult.brief);
@@ -265,6 +303,13 @@ export const auditDeckTool = {
     } else if (mode === 'blocking') {
       findings.push(...renderedEvidenceFindings(slideCount, design, artifacts));
     }
+    const preparedPacketHash = packetHash({
+      buildHash: hash,
+      contentDigest: sourceHash,
+      briefHash: briefResult.briefHash,
+      findings,
+      artifacts
+    });
 
     const prompt = criticPrompt({
       brief: briefResult.brief,
@@ -286,6 +331,7 @@ export const auditDeckTool = {
         build_hash: hash,
         content_file: contentFile,
         content_hash: sourceHash,
+        packet_hash: preparedPacketHash,
         brief_hash: briefResult.briefHash,
         mode,
         target,
@@ -310,7 +356,25 @@ export const auditDeckTool = {
     if (opts.prepared_build_hash !== hash) {
       throw new Error('the deck changed after the critic packet was prepared; run audit_deck preparation again');
     }
+    if (!opts.prepared_packet_hash) {
+      throw new Error('critique submission requires prepared_packet_hash from the preparation call');
+    }
+    if (opts.prepared_packet_hash !== preparedPacketHash) {
+      throw new Error('the brief, findings, or screenshot evidence changed after preparation; prepare the critic packet again');
+    }
     const critique = validateCriticSubmission(opts.critique);
+    for (const finding of critique.findings) {
+      if (
+        finding.slide_index !== undefined &&
+        (
+          !Number.isInteger(finding.slide_index) ||
+          finding.slide_index < 0 ||
+          finding.slide_index >= slideCount
+        )
+      ) {
+        throw new Error(`critic finding slide_index must be an integer from 0 to ${slideCount - 1}`);
+      }
+    }
     if (
       mode === 'blocking' &&
       (!critique.reviewer.independent || critique.reviewer.method !== 'different-model')
@@ -358,6 +422,7 @@ export const auditDeckTool = {
       content_file: contentFile,
       content_hash: sourceHash,
       brief_hash: briefResult.briefHash,
+      packet_hash: preparedPacketHash,
       mode,
       target,
       iteration,

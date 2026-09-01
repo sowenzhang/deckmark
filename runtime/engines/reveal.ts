@@ -218,7 +218,7 @@ function parseSlideMotionDirective(block: string): {
   content: string;
   directive: SlideMotionDirective;
 } {
-  const match = block.match(/<!--\s*deckmark:\s*([^]*?)-->/i);
+  const match = block.match(/^\s*<!--\s*deckmark:\s*([^\r\n]*?)-->\s*(?:\r?\n|$)/i);
   if (!match) return { content: block, directive: {} };
 
   const directive: SlideMotionDirective = {};
@@ -278,11 +278,22 @@ export async function buildDeck(opts: BuildOpts): Promise<BuildResult> {
   const hasPerSlideFragments = slidePlans.some(plan =>
     plan.directive.fragments !== undefined && plan.directive.fragments !== 'none'
   );
-  const hasPerSlideAutoAnimate = slidePlans.some(plan => plan.directive.autoAnimate === true);
   const hasPerSlideTransition = slidePlans.some(plan =>
     plan.directive.transition !== undefined && plan.directive.transition !== 'none'
   );
-  const autoAnimateEnabled = autoAnimate || hasPerSlideAutoAnimate;
+  const autoAnimateSlides = new Set<number>();
+  if (autoAnimate) {
+    slidePlans.forEach((_plan, index) => autoAnimateSlides.add(index));
+  }
+  slidePlans.forEach((plan, index) => {
+    if (plan.directive.autoAnimate === false) {
+      autoAnimateSlides.delete(index);
+    } else if (plan.directive.autoAnimate === true) {
+      autoAnimateSlides.add(index);
+      if (index > 0) autoAnimateSlides.add(index - 1);
+    }
+  });
+  const autoAnimateEnabled = [...autoAnimateSlides].some(index => autoAnimateSlides.has(index + 1));
   const transitionsEnabled = slideTransitions || hasPerSlideTransition;
 
   const slugCounts = new Map<string, number>();
@@ -301,7 +312,7 @@ export async function buildDeck(opts: BuildOpts): Promise<BuildResult> {
     const title = titleMatch ? titleMatch[1].trim() : '';
     const baseSlug = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : '';
     const slug = uniqueSlug(slugCounts, baseSlug || `slide-${i}`);
-    const slideAutoAnimate = directive.autoAnimate ?? autoAnimate;
+    const slideAutoAnimate = autoAnimateSlides.has(i);
     const autoAnimateAttr = slideAutoAnimate ? ' data-auto-animate' : '';
     const transitionAttr = directive.transition
       ? ` data-transition="${directive.transition}"`
