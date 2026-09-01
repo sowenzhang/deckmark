@@ -1,8 +1,13 @@
 // mcp/tools/publish.ts
-import { resolve, basename } from 'node:path';
+import { resolve, basename, sep } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { inlineHtml } from '../../runtime/publish/inline-html.ts';
 import { multiFile } from '../../runtime/publish/multi-file.ts';
+import { buildHash, contentHash } from '../../runtime/store/build-hash.ts';
+import { readDeckBrief, qualityMode, qualityTarget } from '../../runtime/quality/brief.ts';
+import { readLatestQualityReport } from '../../runtime/quality/store.ts';
+import { inspectBuildDesign } from '../../runtime/quality/analyze.ts';
 
 interface PublishInput {
   dir?: string;
@@ -64,6 +69,50 @@ export const publishDeckTool = {
       throw new Error(`publish_deck: ${indexPath} is only ${sz} bytes. Run build_deck first to produce a real deck.`);
     }
     dbg(`build/index.html OK (${sz} bytes)`);
+
+    const { brief, briefHash } = await readDeckBrief(cwd);
+    if (qualityMode(brief) === 'blocking') {
+      const report = await readLatestQualityReport(cwd);
+      if (!report) {
+        throw new Error('publish_deck: quality mode is blocking, but no quality report exists. Run audit_deck first.');
+      }
+      const currentHash = await buildHash(buildDir);
+      if (report.build_hash !== currentHash) {
+        throw new Error('publish_deck: the accepted quality report is stale because the deck changed. Run audit_deck again.');
+      }
+      if (report.verdict !== 'accept') {
+        throw new Error('publish_deck: quality mode is blocking and the latest audit verdict is revise.');
+      }
+      if (
+        report.mode !== 'blocking' ||
+        report.brief_hash !== briefHash ||
+        report.target !== qualityTarget(brief) ||
+        !report.reviewer.independent ||
+        report.reviewer.method !== 'different-model' ||
+        report.artifacts.length === 0 ||
+        report.floor_failures.length > 0 ||
+        report.audience_reception.length < 3 ||
+        report.overall_score < report.target ||
+        !report.stop.stop ||
+        report.stop.reason !== 'accepted' ||
+        [...report.deterministic_findings, ...report.critic_findings]
+          .some(finding => finding.priority === 'P1')
+      ) {
+        throw new Error('publish_deck: the latest quality report does not satisfy blocking-mode requirements.');
+      }
+      const contentPath = resolve(cwd, report.content_file);
+      if (contentPath !== cwd && !contentPath.startsWith(cwd + sep)) {
+        throw new Error('publish_deck: quality report content path is outside the deck directory.');
+      }
+      const currentContent = await readFile(contentPath, 'utf8');
+      if (contentHash(currentContent) !== report.content_hash) {
+        throw new Error('publish_deck: deck content changed after the accepted audit. Rebuild and run audit_deck again.');
+      }
+      const buildHtml = await readFile(indexPath, 'utf8');
+      if (inspectBuildDesign(buildHtml).contentHash !== report.content_hash) {
+        throw new Error('publish_deck: build content metadata does not match the accepted audit. Rebuild and run audit_deck again.');
+      }
+    }
 
     try {
       if (mode === 'single-file') {

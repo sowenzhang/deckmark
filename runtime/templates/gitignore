@@ -1,2 +1,3 @@
 build/
 annotations/.session-*.pid
+.deckmark/

@@ -107,7 +107,7 @@ html, body { background: var(--dm-bg); color: var(--dm-fg); }
 
 .reveal .progress { color: var(--dm-accent); height: 3px; }
 .reveal .controls { color: var(--dm-muted); opacity: 0.5; }
-.reveal .fragment { transition: all 280ms cubic-bezier(0.16, 1, 0.3, 1); }
+.reveal .fragment { transition: opacity 280ms cubic-bezier(0.16, 1, 0.3, 1), transform 280ms cubic-bezier(0.16, 1, 0.3, 1); }
 
 /* Honor OS-level 'Reduce motion' for reveal transitions + fragment animations. */
 @media (prefers-reduced-motion: reduce) {

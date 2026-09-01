@@ -11,11 +11,12 @@ $ARGUMENTS
 
 ## Gathering the design (three axes)
 
-deckmark separates visual design into three orthogonal choices:
+deckmark separates visual design into three orthogonal choices plus a motion character:
 
 - **mode** — `light` or `dark`
 - **style** — `professional` | `academic` | `fashion` | `technical` | `fun`
 - **motion** — multi-select of `slide-transitions` | `fragment-reveals` | `auto-animate`
+- **motion style** — `subtle` | `engaging` | `cinematic`
 
 ### Step 1: try to infer from the user's brief
 
@@ -46,6 +47,7 @@ If you have the `AskUserQuestion` tool, use **one** call with one question per u
 - **mode** (single-select, 2 options): Light / Dark
 - **style** (single-select, 4 options): Professional / Academic / Fashion / Fun. *Replace Fun with Technical if the topic is engineering/code/devtools/dev-tools-flavored.* If the user picks "Other" for style, infer Technical from their text or fall back to professional.
 - **motion** (multi-select, 3 options): Slide transitions / Fragment reveals / Auto-animate. **Pre-check Slide transitions** as the most common default; user can uncheck if they want a static deck.
+- **motion style**: infer `subtle` unless the user asks for engaging, dynamic, cinematic, or dramatic staging.
 
 If you do NOT have `AskUserQuestion`, ask the same questions inline in **one combined message** with three clearly labeled sections. Don't ask one axis at a time — users prefer answering everything together. Number each section's options (1/2/3...) and tell the user to reply with the numbers (e.g., "1, A, 2+3"). Example:
 
@@ -67,13 +69,15 @@ Or just describe the look you want in plain words — I'll map it.
 
 If the user gives a partial free-form answer like "technical + dark", great — accept it and ask **only the remaining axis** ("Got it, technical + dark. Any motion preference — slide transitions, fragment reveals, auto-animate? Default is just slide transitions."). Never proceed to scaffolding with an unanswered axis silently filled by a default.
 
-Defaults to use only when the user explicitly declines or says "you pick": `mode: light`, `style: professional`, `motion: ['slide-transitions']`.
+Defaults to use only when the user explicitly declines or says "you pick": `mode: light`, `style: professional`, `motion: ['slide-transitions']`, `motion_style: subtle`.
 
 ### Step 3: a few content questions (always ask, briefly)
 
 - Audience
 - Approximate length (3-5, 5-10, 10+ slides)
 - Any specific points or sections they want covered
+- What the audience should believe, remember, or do afterward
+- Likely objections or concerns
 
 Keep it tight — one combined message. Don't bury the user under a survey.
 
@@ -81,21 +85,22 @@ Keep it tight — one combined message. Don't bury the user under a survey.
 
 1. Pick a slug-cased folder name from the topic (e.g., `q2-results-deck/`).
 2. Call `init_deck` with `{ dir: "<slug>", agent: "claude" }` (or whichever agent applies; `"generic"` if unsure).
-3. Write `content.md` inside the scaffolded folder. Use `---` on its own line between slides. Match the chosen style when writing:
+3. Fill `deckmark.brief.json` with the audience, purpose, key takeaway, desired action, visual direction, motion intent, narrative arc, and quality mode. Default quality mode is advisory.
+4. Write `content.md` inside the scaffolded folder. Use `---` on its own line between slides. Match the chosen style when writing:
    - `professional` — balanced bullet points, clear sections, concrete numbers
    - `academic` — flowing prose, citations, longer reading depth
    - `fashion` — short punchy headlines, big claims, generous whitespace
    - `technical` — code blocks generous, terminal output, diagrams
    - `fun` — conversational tone, friendly framing, light commentary
-4. Call `build_deck` with `{ dir: "<slug>", style, mode, motion }`.
-5. Call `start_review` with `{ dir: "<slug>" }`. Tell the user **both** annotation paths in one short message: *"Deck at <url> — press `A` to annotate any element, click ✓ Done when finished, and I'll pick up. Or come back here any time and tell me what to change (press Esc first if I'm still waiting)."*
-6. **Immediately call `wait_for_close`** with the returned `session_id` (default 1800 s timeout) in the same turn. Do not end your turn here — Done in the browser only reaches you while `wait_for_close` is polling. The user can press Esc to interrupt and chat directly; that's expected and supported. When `wait_for_close` returns (closed, timed out, OR interrupted), proceed to step 7.
-7. Call `get_annotations` with `{ dir: "<slug>", format: "md" }`.
-8. For each annotation, locate the matching markdown in `content.md` (use `element.text` as the fallback anchor) and apply the change. Treat the `summary` field as global guidance.
-9. Re-run `build_deck` with the same design args.
-10. **Call `start_review` again immediately followed by `wait_for_close`** — same contract as step 5+6. The previous review server is dead (auto-shutdown). Never tell the user to refresh the old URL, and never split start_review and wait_for_close across turns.
-11. Summarize what changed and give them the **new** URL. Ask if they want another round or to publish. If they say change the look, just re-call `build_deck` with a new `style` / `mode` / `motion` and then a new `start_review`.
-12. On "publish", **ask the user which mode they want — never silently default**. Present the tradeoff in one short message:
+5. Call `build_deck` with `{ dir: "<slug>", style, mode, motion, motion_style }`.
+6. Call `audit_deck` without `critique`. Address deterministic P1 findings.
+7. If screenshot tooling is available, capture the current build as PNG after it finishes and save all settled-slide captures and meaningful before/after motion states under `.deckmark/artifacts/`. Call `audit_deck` again with those artifacts to prepare the exact critic packet. Dispatch that critic prompt once to a different-model read-only reviewer when supported, then submit the structured result with the returned `run_id`, `build_hash` as `prepared_build_hash`, `packet_hash` as `prepared_packet_hash`, and `iteration: 1`. Fix blockers, rebuild, capture a fresh static set, and repeat for at most three passes with the same `run_id`. Advisory mode may continue with clearly reported limitations; blocking mode requires rendered evidence and an honestly reported independent reviewer.
+8. Call `start_review` with `{ dir: "<slug>" }`. Tell the user **both** annotation paths in one short message: *"Deck at <url> — press `A` to annotate any element, click ✓ Done when finished, and I'll pick up. Or come back here any time and tell me what to change (press Esc first if I'm still waiting)."*
+9. **Immediately call `wait_for_close`** with the returned `session_id` (default 1800 s timeout) in the same turn. Do not end the turn after `start_review`; never split `start_review` and `wait_for_close` across turns.
+10. Call `get_annotations` with `{ dir: "<slug>", format: "md" }`.
+11. Apply each annotation, rebuild with the same design args, and start a fresh review session. Never tell the user to refresh or reuse the previous review URL; each rebuild requires the new URL returned by a new `start_review`.
+12. Summarize what changed and give the user the new URL.
+13. On "publish", **ask the user which mode they want — never silently default**. Present the tradeoff in one short message:
 
     > Two options for publishing:
     > - **single-file** — one self-contained `.html` (~1-2 MB). Easiest to email, attach to a message, copy to a USB drive, or send over chat. Opens directly in any browser, no server needed.

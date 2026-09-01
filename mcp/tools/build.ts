@@ -6,7 +6,8 @@ import {
   listMotions,
   type DeckStyle,
   type DeckMode,
-  type DeckMotion
+  type DeckMotion,
+  type DeckMotionStyle
 } from '../../runtime/engines/reveal.ts';
 
 interface BuildInput {
@@ -15,6 +16,7 @@ interface BuildInput {
   style?: DeckStyle;
   mode?: DeckMode;
   motion?: DeckMotion[];
+  motion_style?: DeckMotionStyle;
   slideNumbers?: boolean | 'c' | 'c/t' | 'h.v' | 'h/v';
   customCss?: string;
   template?: string;
@@ -55,7 +57,13 @@ export const buildDeckTool = {
         type: 'array',
         items: { type: 'string', enum: listMotions() },
         default: ['slide-transitions'],
-        description: 'Multi-select animation flags. slide-transitions = animate between slides (else jump). fragment-reveals = list items appear one at a time. auto-animate = matching elements morph between slides (for diagram build-ups). Pass [] to disable all motion.'
+        description: 'Multi-select global animation flags. slide-transitions = animate between slides (else jump). fragment-reveals = list items appear one at a time. auto-animate = matching elements morph between slides (for diagram build-ups). Pass [] to disable global motion; explicit per-slide directives can still opt selected slides into motion.'
+      },
+      motion_style: {
+        type: 'string',
+        enum: ['subtle', 'engaging', 'cinematic'],
+        default: 'subtle',
+        description: 'How enabled motion should feel. subtle = quiet and fast; engaging = clearer directional staging; cinematic = slower, larger transitions for selected high-impact decks. Motion still needs to support the message.'
       },
       slideNumbers: {
         oneOf: [
@@ -91,6 +99,7 @@ export const buildDeckTool = {
       style: opts.style,
       mode: opts.mode,
       motion: opts.motion,
+      motionStyle: opts.motion_style,
       slideNumbers: opts.slideNumbers,
       customCssPath: opts.customCss ? resolveWithinDir(cwd, opts.customCss, 'customCss') : undefined,
       templatePath: opts.template ? resolveWithinDir(cwd, opts.template, 'template') : undefined,
@@ -102,6 +111,7 @@ export const buildDeckTool = {
       style: result.style,
       mode: result.mode,
       motion: result.motion,
+      motion_style: result.motionStyle,
       slide_numbers: result.slideNumbers
     };
   }

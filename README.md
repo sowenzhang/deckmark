@@ -2,7 +2,7 @@
 
 In-browser annotation for AI-generated presentations. Close the feedback loop without screenshots — works with any AI coding agent that speaks MCP.
 
-You install deckmark once into your agent. Then you type `/deckmark:use-deckmark <topic>` and the agent asks about **mode**, **style**, and **motion**, builds a slide deck, opens it in your browser with an annotation overlay, you click directly on elements to leave change requests, and when you come back to the agent it reads those annotations and applies them. No screenshots, no copy-paste, no terminal–browser ping-pong.
+You install deckmark once into your agent. Then you type `/deckmark:use-deckmark <topic>` and the agent defines the audience and intended outcome, chooses **mode**, **style**, and **motion**, builds the deck, checks its visual quality and message flow, and opens it in your browser with an annotation overlay. You click directly on elements to leave change requests, and the agent reads those annotations and applies them.
 
 ---
 
@@ -37,7 +37,7 @@ deckmark ships an MCP server bundled in a GitHub Release tarball, fetched on dem
 }
 ```
 
-Restart the agent. The seven deckmark MCP tools become callable. (Note: the slash command `/deckmark:use-deckmark` and the design-system skill are Claude Code–specific packaging conventions and won't appear in other agents. The tools themselves work everywhere — just describe your intent in natural language and the agent will call them.)
+Restart the agent. The eight deckmark MCP tools become callable. (Note: the slash command `/deckmark:use-deckmark` and the design-system skill are Claude Code–specific packaging conventions and won't appear in other agents. The tools themselves work everywhere — just describe your intent in natural language and the agent will call them.)
 
 ### Updating to a new release
 
@@ -64,12 +64,13 @@ After install, in your agent's chat:
 
 The agent will:
 
-1. Confirm three design choices: **mode** (light/dark), **style** (professional/academic/fashion/technical/fun), and **motion** (slide transitions / fragment reveals / auto-animate, multi-select). Skip what you've already specified.
-2. Ask audience and approximate length.
-3. Scaffold a project folder, write `content.md` from your brief, build the deck, and launch a local annotation server at `http://127.0.0.1:<port>`.
-4. Tell you the URL. You open it. Press `A` to enter annotation mode, click any slide element, type a comment, repeat. Click ✓ Done when finished.
-5. After you click Done, the agent reads your structured feedback, edits `content.md`, and rebuilds. (If you return later, you can still say “apply the comments”.)
-6. When the deck is final, ask the agent to publish. It'll offer two options: a single self-contained `.html` (good for email/USB/attachment), or a `published/` folder with `index.html` + cacheable assets (good for hosting on GitHub Pages, Netlify, S3, etc.).
+1. Confirm the audience, desired takeaway/action, likely objections, length, and design direction.
+2. Scaffold `content.md` plus a structured `deckmark.brief.json`.
+3. Build the deck with **mode**, **style**, **motion**, and a motion character (`subtle`, `engaging`, or `cinematic`).
+4. Run `audit_deck` against a deck-specific definition of beauty, narrative flow, credibility, and audience reception. When the host supports screenshots and multiple models, the agent can capture the rendered slides and send the critic packet to a different-model reviewer.
+5. Launch the local annotation server at `http://127.0.0.1:<port>`. Press `A`, click slide elements, and leave comments. Click ✓ Done when finished.
+6. Apply the structured feedback, rebuild, and repeat as needed.
+7. Publish as either a single self-contained `.html` or a hostable `published/` folder.
 
 ---
 
@@ -78,10 +79,12 @@ The agent will:
 ```
 user types /deckmark:use-deckmark <topic>
         ↓
-agent asks: mode? style? motion? audience? length?
+agent asks: audience? outcome? objections? style? motion?
         ↓
 agent + user align on storyline outline (core argument per slide)
-agent: init_deck → writes content.md → build_deck
+agent: init_deck → fills deckmark.brief.json → writes content.md → build_deck
+        ↓
+agent: audit_deck → independent critic when available → bounded revision
         ↓
 agent: start_review → "open <url>, press A to annotate, click Done"
         ↓
@@ -96,12 +99,13 @@ agent: publish_deck (single-file or multi-file)
 
 Annotations live in `./annotations/session-<timestamp>.json` next to your deck. Writes are atomic (temp-file + rename) and serialized per-deck. Each annotation captures the slide index, CSS selector, DOM path, bounding box, element text, the user's comment, and optional overall summary.
 
-### The seven MCP tools
+### The eight MCP tools
 
 | Tool | Purpose |
 |---|---|
 | `init_deck` | Scaffold a project (`content.md`, config, agent instructions, `.gitignore`). |
-| `build_deck` | Render `content.md` to `./build/index.html` with reveal.js. Accepts `style`/`mode`/`motion`/`slideNumbers` plus optional `customCss`/`template`/`markedPlugins` overrides. |
+| `build_deck` | Render `content.md` to `./build/index.html` with reveal.js. Accepts `style`/`mode`/`motion`/`motion_style`/`slideNumbers` plus optional `customCss`/`template`/`markedPlugins` overrides. |
+| `audit_deck` | Prepare and persist the deck-quality gate: deterministic content findings, rendered-evidence plan, beauty/narrative/audience rubric, independent-critic packet, scores, and accept/revise verdict. |
 | `start_review` | Launch the local annotation review server, return URL + session id. |
 | `wait_for_close` | Block until the user clicks "Done" in the browser, or until timeout. |
 | `get_annotations` | Read annotations from disk (works even if Done wasn't clicked). |
@@ -114,9 +118,27 @@ Three orthogonal axes:
 
 - **Style** — `professional` (Inter sans, indigo accent), `academic` (Fraunces + Source Serif, terra accent), `fashion` (Space Grotesk display, amber accent), `technical` (terminal feel, cyan accent, monospace prominence), `fun` (Outfit, rounded, coral accent).
 - **Mode** — `light` or `dark`. Applies to all 5 styles via CSS variables.
-- **Motion** — multi-select: `slide-transitions`, `fragment-reveals`, `auto-animate`. Pass `[]` for no motion. Honors `prefers-reduced-motion`.
+- **Motion** — multi-select: `slide-transitions`, `fragment-reveals`, `auto-animate`. Pass `[]` for no global motion. Honors `prefers-reduced-motion`.
 
-The agent can also accept free-form descriptions ("Stripe Press feel, dark, smooth motion") and map them to the three axes.
+Enabled motion also accepts a character: `subtle`, `engaging`, or `cinematic`. The agent can accept free-form descriptions ("Stripe Press feel, dark, progressively reveal the decision") and map them to these controls.
+
+Selected slides can override global motion with a leading Markdown comment such as `<!-- deckmark: transition=slide fragments=engaging auto-animate -->`. This makes it possible to keep most of a deck restrained while giving an important comparison, reveal, or transformation a deliberate motion beat. `auto-animate` applies to the transition from the previous slide into the directive's slide. These overrides still count as motion in the quality audit.
+
+### Deck quality gate
+
+`init_deck` creates `deckmark.brief.json`, which defines the audience, purpose, key takeaway, desired action, likely objections, visual direction, motion intent, and narrative arc.
+
+Deckmark defines a beautiful deck as:
+
+- **Intentional** — its visual direction fits the audience and message.
+- **Hierarchical** — the point and reading order are immediately clear.
+- **Composed** — scale, alignment, whitespace, density, and rhythm feel deliberate.
+- **Specific** — it does not look like an interchangeable generated template.
+- **Coherent** — the design forms one system without making every slide identical.
+- **Meaningful** — visuals and motion clarify the argument rather than decorate it.
+- **Polished** — construction details do not distract from the message.
+
+The critic also scores slide-to-slide logic, audience fit, credibility, memorability, and action clarity. It simulates a representative audience member, a skeptic, and a decision-maker. Rendered PNG evidence is decoded, dimension-checked, captured after the current build, and kept under `.deckmark/artifacts/`, outside publishable output. Source content, brief, rendered build, deterministic findings, artifact bytes, critic packet, report, and publish are tied together by hashes and freshness checks. The default quality mode is advisory. Optional blocking mode requires rendered screenshot coverage and an honestly reported independent reviewer, and prevents publishing when the accepted report is missing, rejected, or stale. Deckmark records reviewer metadata but cannot independently prove which model the host dispatched.
 
 ---
 
@@ -137,7 +159,7 @@ A future minor release will add a `loadFonts: false` build option to skip the `@
 Single Node 22+ package, TypeScript ESM. Three layers:
 
 - `runtime/` — engine (reveal.js adapter), Fastify review server with overlay script injection, atomic session store, sha256 build hash, browser overlay (vanilla TS bundled via esbuild), publish emitters (inline + multi-file), and project templates.
-- `mcp/` — stdio MCP server that exposes the seven tools by calling into the runtime modules.
+- `mcp/` — stdio MCP server that exposes the eight tools by calling into the runtime modules.
 - `commands/`, `skills/`, `.claude-plugin/`, `.mcp.json` — the Claude plugin packaging surface.
 
 The overlay knows nothing about reveal.js. It walks the rendered DOM and generates stable CSS selectors, so engine adapters for Slidev / Impress / Marp can be added later without changing a line of overlay code. reveal.js is vendored via npm (`node_modules/reveal.js/dist/`) — no CDN dependency, works offline.

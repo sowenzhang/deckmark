@@ -2,7 +2,7 @@
 
 This project uses **deckmark**, an AI-agent plugin that builds slide decks with in-browser annotation. You drive deckmark exclusively through its **MCP tools** — never through a CLI. There is no `deckmark` binary to invoke.
 
-## The seven MCP tools
+## The eight MCP tools
 
 You should already have access to these via the deckmark MCP server (`@deckmark`):
 
@@ -10,6 +10,7 @@ You should already have access to these via the deckmark MCP server (`@deckmark`
 |---|---|
 | `init_deck` | Once at the start of a new deck. |
 | `build_deck` | After writing or editing `content.md`. Idempotent. Accepts design params (see below). |
+| `audit_deck` | After a build and before human review. Returns deck-specific quality findings and an independent-critic packet; call again with the structured critique to persist the verdict. |
 | `start_review` | After a build, to open the local review server in the user's browser. |
 | `wait_for_close` | Optional — block until the user clicks "Done." |
 | `get_annotations` | Whenever the user says "address the comments." Works even if Done was not clicked. |
@@ -18,14 +19,15 @@ You should already have access to these via the deckmark MCP server (`@deckmark`
 
 ## Workflow
 
-1. Edit `content.md` to reflect the user's outline. Slides are separated by `---` on its own line. Use markdown headings (`#`) for slide titles.
-2. Call **`build_deck`** with `{ dir: "<this-project-dir>", style, mode, motion }` to render to `./build/index.html`.
-3. Call **`start_review`** with `{ dir: "<this-project-dir>" }` to open the deck in the browser with the annotation overlay injected. Tell the user the URL it returns.
-4. Wait for the user to come back (either they click "Done" in the browser, or just say "apply the comments" in chat).
-5. Call **`get_annotations`** with `{ dir: "<this-project-dir>", format: "md" }` to read the feedback.
-6. For each annotation: locate the corresponding text in `content.md` (use `element.text` as the anchor if the selector is ambiguous), apply the requested change.
-7. Call **`build_deck`** again with the same design params.
-8. Summarize what changed and ask if they want another round, a different design, or to publish.
+1. Fill `deckmark.brief.json` with the audience, purpose, key takeaway, desired action, visual direction, motion intent, and narrative arc.
+2. Edit `content.md` to reflect the outline. Slides are separated by `---` on its own line. Use message-led markdown headings (`#`) for slide titles.
+3. Call **`build_deck`** with `{ dir: "<this-project-dir>", style, mode, motion, motion_style }` to render to `./build/index.html`.
+4. Call **`audit_deck`** without a critique. Fix deterministic blockers, save requested PNG evidence under `.deckmark/artifacts/`, then call `audit_deck` again with those artifacts to prepare the exact critic packet. Send that prompt to a different-model reviewer when supported, then submit the structured critique with the returned `run_id`, `build_hash` as `prepared_build_hash`, and `packet_hash` as `prepared_packet_hash`.
+5. Call **`start_review`** with `{ dir: "<this-project-dir>" }` to open the accepted or advisory deck in the browser with the annotation overlay injected. Tell the user the URL it returns.
+6. Wait for the user to come back.
+7. Call **`get_annotations`** with `{ dir: "<this-project-dir>", format: "md" }` to read the feedback.
+8. Apply each annotation and rebuild with the same design parameters.
+9. Summarize what changed and ask if they want another round, a different design, or to publish.
 
 ## Design parameters for `build_deck`
 
@@ -33,7 +35,16 @@ deckmark has a 3-axis design system:
 
 - **`style`** (single): `professional` (default) / `academic` / `fashion` / `technical` / `fun`
 - **`mode`** (single): `light` (default) / `dark`
-- **`motion`** (multi-select array): `slide-transitions` (default), `fragment-reveals`, `auto-animate`. Pass `[]` for no motion.
+- **`motion`** (multi-select array): `slide-transitions` (default), `fragment-reveals`, `auto-animate`. Pass `[]` for no global motion; per-slide directives can still opt selected slides into motion.
+- **`motion_style`**: `subtle` (default), `engaging`, or `cinematic`. Motion should direct attention or explain change, not decorate every slide.
+
+Use a leading per-slide directive for selected motion moments: `<!-- deckmark: transition=slide fragments=engaging auto-animate -->`. Supported transitions are `none`, `fade`, `slide`, `zoom`, `convex`, and `concave`; fragments accept `none`, `subtle`, `engaging`, or `cinematic`. `auto-animate` applies to the transition from the previous slide into that slide.
+
+## Quality gate
+
+Beautiful means intentional, hierarchical, composed, specific, coherent, meaningful, and polished relative to the deck brief. The critic also evaluates narrative flow, credibility, memorability, and how representative, skeptical, and decision-making audience members will receive the message.
+
+`quality.mode: "advisory"` reports weaknesses without blocking. `"blocking"` requires screenshots captured after the current build, an honestly reported different-model reviewer, matching source/build hashes, and prevents `publish_deck` when the report is missing, stale, or rejected. Deckmark records reviewer metadata but cannot independently prove which model the host dispatched.
 
 If the user asks to change the design mid-flow, just re-call `build_deck` with the new params. No content rewrite needed.
 
