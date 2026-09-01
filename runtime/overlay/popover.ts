@@ -37,7 +37,12 @@ export function showPopover(
     ta.focus();
 
     let resolved = false;
+    let removeOutsideListener: (() => void) | null = null;
     const cleanup = () => {
+      if (removeOutsideListener) {
+        removeOutsideListener();
+        removeOutsideListener = null;
+      }
       if (activePopover === pop) activePopover = null;
       pop.remove();
     };
@@ -71,6 +76,15 @@ export function showPopover(
     submitBtn.addEventListener('pointerdown', submit);
     cancelBtn.addEventListener('click', cancel);
     cancelBtn.addEventListener('pointerdown', cancel);
+
+    const onOutsidePointerDown = (e: PointerEvent) => {
+      const targetEl = e.target as Node | null;
+      if (targetEl && !pop.contains(targetEl)) cancel(e);
+    };
+    document.addEventListener('pointerdown', onOutsidePointerDown, true);
+    removeOutsideListener = () => {
+      document.removeEventListener('pointerdown', onOutsidePointerDown, true);
+    };
 
     ta.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') cancel();

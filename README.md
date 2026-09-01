@@ -81,6 +81,7 @@ user types /deckmark:use-deckmark <topic>
         ↓
 agent asks: audience? outcome? objections? style? motion?
         ↓
+agent + user align on storyline outline (core argument per slide)
 agent: init_deck → fills deckmark.brief.json → writes content.md → build_deck
         ↓
 agent: audit_deck → independent critic when available → bounded revision
@@ -103,7 +104,7 @@ Annotations live in `./annotations/session-<timestamp>.json` next to your deck. 
 | Tool | Purpose |
 |---|---|
 | `init_deck` | Scaffold a project (`content.md`, config, agent instructions, `.gitignore`). |
-| `build_deck` | Render `content.md` to `./build/index.html` with reveal.js. Accepts `style`/`mode`/`motion`/`slideNumbers` params. |
+| `build_deck` | Render `content.md` to `./build/index.html` with reveal.js. Accepts `style`/`mode`/`motion`/`motion_style`/`slideNumbers` plus optional `customCss`/`template`/`markedPlugins` overrides. |
 | `audit_deck` | Prepare and persist the deck-quality gate: deterministic content findings, rendered-evidence plan, beauty/narrative/audience rubric, independent-critic packet, scores, and accept/revise verdict. |
 | `start_review` | Launch the local annotation review server, return URL + session id. |
 | `wait_for_close` | Block until the user clicks "Done" in the browser, or until timeout. |

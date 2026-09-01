@@ -460,3 +460,58 @@ test('buildDeck does NOT sync deckmark internals (AGENTS.md, annotations/, .giti
   assert.ok(existsSync(join(dir, 'build', 'assets', 'logo.svg')), 'user asset should be copied');
   await rm(dir, { recursive: true });
 });
+
+test('buildDeck appends custom CSS and supports custom HTML template placeholders', async () => {
+  const dir = await tmpDir();
+  await writeFile(join(dir, 'content.md'), SAMPLE_CONTENT);
+  await writeFile(join(dir, 'custom.css'), '.custom-token { color: hotpink; }');
+  await writeFile(join(dir, 'template.html'), `<!doctype html>
+<html data-mode="{{DECKMARK_MODE}}">
+<head>
+  <link rel="stylesheet" href="{{DECKMARK_REVEAL_PREFIX}}/reveal.css">
+  <style>{{DECKMARK_THEME_CSS}}</style>
+</head>
+<body>
+  <main class="slides">{{DECKMARK_SLIDES}}</main>
+  <script>{{DECKMARK_REVEAL_INIT}}</script>
+</body>
+</html>`);
+  await buildDeck({
+    contentPath: join(dir, 'content.md'),
+    outDir: join(dir, 'build'),
+    customCssPath: join(dir, 'custom.css'),
+    templatePath: join(dir, 'template.html')
+  });
+  const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
+  assert.match(html, /class="slides"/);
+  assert.match(html, /data-mode="light"/);
+  assert.match(html, /data-deckmark-style="professional"/);
+  assert.match(html, /data-deckmark-content-hash="sha256:[a-f0-9]{64}"/);
+  assert.match(html, /data-deckmark-motion="slide-transitions"/);
+  assert.match(html, /\.custom-token \{ color: hotpink; \}/);
+  assert.match(html, /\.reveal \.fragment\.dm-fragment/);
+  assert.match(html, /Reveal\.initialize/);
+  await rm(dir, { recursive: true });
+});
+
+test('buildDeck loads marked plugin modules', async () => {
+  const dir = await tmpDir();
+  await writeFile(join(dir, 'content.md'), '# Slide One\n\n[[plugin-token]]');
+  await writeFile(join(dir, 'marked-plugin.mjs'), `export default function register(marked) {
+  marked.use({
+    hooks: {
+      preprocess(markdown) {
+        return markdown.replaceAll('[[plugin-token]]', '**from-plugin**');
+      }
+    }
+  });
+}`);
+  await buildDeck({
+    contentPath: join(dir, 'content.md'),
+    outDir: join(dir, 'build'),
+    markedPlugins: [join(dir, 'marked-plugin.mjs')]
+  });
+  const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
+  assert.match(html, /<strong>from-plugin<\/strong>/);
+  await rm(dir, { recursive: true });
+});

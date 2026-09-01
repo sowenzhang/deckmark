@@ -152,7 +152,7 @@ In blocking mode, `publish_deck` refuses a missing, rejected, or stale quality r
 
 Reviewer independence is recorded from the host's reviewer metadata; deckmark cannot independently prove which model the host dispatched. The workflow requires the agent to report this honestly, and blocking mode rejects an explicitly non-independent review.
 
-### Style influences content, not just visuals
+### Style influences tone, not structure
 
 Write `content.md` to suit the chosen style:
 
@@ -163,6 +163,13 @@ Write `content.md` to suit the chosen style:
 - `fun` — conversational tone, friendly framing, light commentary
 
 Same content can look great in any style; tuning the prose to the personality is what makes the chosen style feel intentional.
+
+Before drafting any slides, lock the narrative first:
+
+- define audience + decision goal ("what should this deck change?")
+- agree on 3–6 core arguments
+- map a simple arc (problem → evidence → conclusion / next step)
+- assign one primary point per slide in the outline
 
 ## Annotation data shape
 
@@ -183,12 +190,14 @@ Each session also has:
 - `summary` — overall guidance from the Done dialog. Apply as a global theme, not a single change.
 - `build_hash` — sha256 of the build at review start; if it differs from a later build, selectors may be stale.
 
-## Workflow
+## Workflow (Plan → Draft → Refine)
 
 ```
 ask design + audience/message/outcome
   ↓
-init_deck → fill deckmark.brief.json → write content.md → build_deck
+init_deck → plan storyline with user (audience/goals/core arguments/outline)
+  ↓
+fill deckmark.brief.json → write content.md from the approved outline → build_deck
   ↓
 audit_deck → independent critic → bounded revise/accept loop
   ↓
