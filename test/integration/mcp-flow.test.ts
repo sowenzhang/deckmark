@@ -83,9 +83,14 @@ test('full MCP flow: init → build → start_review → POST annotation → get
     name: 'init_deck',
     arguments: { dir: deckDir, agent: 'generic' }
   }) as { content: Array<{ text: string }> };
-  const initOut = JSON.parse(initRes.content[0].text) as { path: string; content_file: string };
+  const initOut = JSON.parse(initRes.content[0].text) as {
+    path: string;
+    content_file: string;
+    brief_file: string;
+  };
   assert.equal(initOut.path, deckDir);
   await access(initOut.content_file);
+  await access(initOut.brief_file);
 
   // Write a minimal content.md
   await writeFile(join(deckDir, 'content.md'), '# Hello\n\nWorld.\n\n---\n\n# Two\n\nThings.\n');
@@ -98,6 +103,14 @@ test('full MCP flow: init → build → start_review → POST annotation → get
   const buildOut = JSON.parse(buildRes.content[0].text) as { slide_count: number };
   assert.equal(buildOut.slide_count, 2);
   await access(join(deckDir, 'build', 'index.html'));
+
+  const auditRes = await client.call('tools/call', {
+    name: 'audit_deck',
+    arguments: { dir: deckDir }
+  }) as { content: Array<{ text: string }> };
+  const auditOut = JSON.parse(auditRes.content[0].text) as { status: string; critic_prompt: string };
+  assert.equal(auditOut.status, 'needs_critic');
+  assert.match(auditOut.critic_prompt, /audience reception/i);
 
   // start_review
   const startRes = await client.call('tools/call', {

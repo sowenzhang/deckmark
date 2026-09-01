@@ -42,7 +42,7 @@ interface InitInput {
 export const initDeckTool = {
   name: 'init_deck',
   description:
-    'Scaffold a new deckmark project at `dir`. Creates content.md, deckmark.config.json, .gitignore, and an agent instruction file. Call this once when the user asks to create a new presentation.',
+    'Scaffold a new deckmark project at `dir`. Creates content.md, deckmark.brief.json, deckmark.config.json, .gitignore, and an agent instruction file. Call this once when the user asks to create a new presentation.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -60,7 +60,9 @@ export const initDeckTool = {
     const target = resolve(process.cwd(), opts.dir);
     await mkdir(target, { recursive: true });
     await mkdir(join(target, 'annotations'), { recursive: true });
+    await mkdir(join(target, '.deckmark', 'artifacts'), { recursive: true });
     await copyTemplate('content.md', join(target, 'content.md'));
+    await copyTemplate('deckmark.brief.json', join(target, 'deckmark.brief.json'));
     await copyTemplate('deckmark.config.json', join(target, 'deckmark.config.json'));
     await copyTemplate('gitignore', join(target, '.gitignore'));
     const instructionFile = agentInstructionFilename(opts.agent ?? 'generic');
@@ -68,6 +70,7 @@ export const initDeckTool = {
     return {
       path: target,
       content_file: join(target, 'content.md'),
+      brief_file: join(target, 'deckmark.brief.json'),
       config_file: join(target, 'deckmark.config.json'),
       instruction_file: join(target, instructionFile)
     };

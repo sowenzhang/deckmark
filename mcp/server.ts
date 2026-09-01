@@ -15,6 +15,7 @@ import {
 } from './tools/review.ts';
 import { getAnnotationsTool } from './tools/annotations.ts';
 import { publishDeckTool } from './tools/publish.ts';
+import { auditDeckTool } from './tools/audit.ts';
 
 interface ToolDef {
   name: string;
@@ -30,6 +31,7 @@ const tools: ToolDef[] = [
   waitForCloseTool,
   getAnnotationsTool,
   stopReviewTool,
+  auditDeckTool,
   publishDeckTool
 ];
 

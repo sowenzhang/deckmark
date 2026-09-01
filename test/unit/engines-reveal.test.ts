@@ -155,6 +155,77 @@ test('buildDeck applies fragment-reveals by adding class="fragment" to list item
   });
   const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
   assert.match(html, /<li[^>]*class="[^"]*fragment[^"]*"/);
+  assert.match(html, /dm-fragment-subtle/);
+  assert.match(html, /transition-property:\s*opacity,\s*transform/);
+  await rm(dir, { recursive: true });
+});
+
+test('buildDeck supports engaging and cinematic motion styles', async () => {
+  const dir = await tmpDir();
+  await writeFile(join(dir, 'content.md'), SAMPLE_CONTENT);
+  await buildDeck({
+    contentPath: join(dir, 'content.md'),
+    outDir: join(dir, 'build'),
+    style: 'professional',
+    motion: ['slide-transitions', 'fragment-reveals', 'auto-animate'],
+    motionStyle: 'engaging'
+  });
+
+  const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
+  assert.match(html, /data-motion-style="engaging"/);
+  assert.match(html, /transition:\s*"slide"/);
+  assert.match(html, /autoAnimateDuration:\s*0\.65/);
+  assert.match(html, /dm-fragment-engaging/);
+
+  await buildDeck({
+    contentPath: join(dir, 'content.md'),
+    outDir: join(dir, 'build'),
+    style: 'academic',
+    motion: ['slide-transitions'],
+    motionStyle: 'cinematic'
+  });
+  const cinematic = await readFile(join(dir, 'build', 'index.html'), 'utf8');
+  assert.match(cinematic, /data-motion-style="cinematic"/);
+  assert.match(cinematic, /transition:\s*"fade"/);
+  assert.match(cinematic, /autoAnimateDuration:\s*0\.9/);
+  await rm(dir, { recursive: true });
+});
+
+test('buildDeck supports purposeful per-slide motion directives', async () => {
+  const dir = await tmpDir();
+  const content = `<!-- deckmark: transition=none fragments=none -->
+# Quiet opening
+
+Start without motion.
+
+---
+
+<!-- deckmark: transition=slide fragments=engaging auto-animate -->
+# Build the decision
+
+- Context
+- Evidence
+- Action
+`;
+  await writeFile(join(dir, 'content.md'), content);
+  await buildDeck({
+    contentPath: join(dir, 'content.md'),
+    outDir: join(dir, 'build'),
+    motion: [],
+    motionStyle: 'subtle'
+  });
+  const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
+  assert.match(html, /data-slide-title="Quiet opening"[^>]+data-transition="none"/);
+  assert.match(html, /data-slide-title="Build the decision"[^>]+data-auto-animate[^>]+data-transition="slide"/);
+  assert.match(html, /dm-fragment-engaging/);
+  assert.match(html, /data-deckmark-motion="slide-transitions,fragment-reveals,auto-animate"/);
+  assert.match(html, /data-deckmark-content-hash="sha256:[a-f0-9]{64}"/);
+  assert.match(html, /\.reveal \.fragment\.dm-fragment-engaging[^}]+transition-duration:\s*360ms/s);
+  assert.match(html, /\.reveal \.fragment\.dm-fragment-engaging:not\(\.visible\)[^}]+translateX\(-0\.55em\)/s);
+  assert.match(html, /\.reveal\.overview \.fragment\.dm-fragment[^}]+opacity:\s*1 !important[^}]+visibility:\s*visible !important[^}]+transform:\s*none !important/s);
+  assert.match(html, /autoAnimate:\s*true/);
+  assert.match(html, /fragments:\s*true/);
+  assert.doesNotMatch(html, /deckmark:\s*transition/);
   await rm(dir, { recursive: true });
 });
 
@@ -164,6 +235,43 @@ test('buildDeck with motion=[] disables transitions', async () => {
   await buildDeck({ contentPath: join(dir, 'content.md'), outDir: join(dir, 'build'), motion: [] });
   const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
   assert.match(html, /transition:\s*"none"/);
+  assert.match(html, /data-deckmark-motion=""/);
+  await rm(dir, { recursive: true });
+});
+
+test('buildDeck motion metadata cannot be spoofed by slide prose', async () => {
+  const dir = await tmpDir();
+  await writeFile(
+    join(dir, 'content.md'),
+    '# Configuration example\n\nWe set transition: "none" and fragments: true in the config.\n'
+  );
+  await buildDeck({
+    contentPath: join(dir, 'content.md'),
+    outDir: join(dir, 'build'),
+    motion: ['slide-transitions']
+  });
+
+  const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
+  assert.match(html, /data-deckmark-motion="slide-transitions"/);
+  assert.doesNotMatch(html, /data-deckmark-motion="[^"]*fragment-reveals/);
+  await rm(dir, { recursive: true });
+});
+
+test('buildDeck does not advertise fragment motion when no fragments were rendered', async () => {
+  const dir = await tmpDir();
+  await writeFile(
+    join(dir, 'content.md'),
+    '# Prose only\n\nThere are no list items on this slide.\n\n---\n\n# Still prose\n\nNo staged content here either.\n'
+  );
+  await buildDeck({
+    contentPath: join(dir, 'content.md'),
+    outDir: join(dir, 'build'),
+    motion: ['slide-transitions', 'fragment-reveals']
+  });
+  const html = await readFile(join(dir, 'build', 'index.html'), 'utf8');
+  assert.match(html, /data-deckmark-motion="slide-transitions"/);
+  assert.match(html, /fragments:\s*false/);
+  assert.doesNotMatch(html, /class="[^"]*\bfragment\b/);
   await rm(dir, { recursive: true });
 });
 
@@ -241,6 +349,16 @@ test('buildDeck does NOT copy a custom-named content file (e.g. slides.md) into 
   await rm(dir, { recursive: true });
 });
 
+test('buildDeck does not copy deckmark.brief.json into publishable build output', async () => {
+  const { existsSync } = await import('node:fs');
+  const dir = await tmpDir();
+  await writeFile(join(dir, 'content.md'), SAMPLE_CONTENT);
+  await writeFile(join(dir, 'deckmark.brief.json'), '{"audience":{"description":"private"}}');
+  await buildDeck({ contentPath: join(dir, 'content.md'), outDir: join(dir, 'build') });
+  assert.equal(existsSync(join(dir, 'build', 'deckmark.brief.json')), false);
+  await rm(dir, { recursive: true });
+});
+
 test('buildDeck does not accidentally skip a deck folder whose name matches the outDir basename', async () => {
   const { mkdir, writeFile: w } = await import('node:fs/promises');
   const { existsSync } = await import('node:fs');
@@ -305,6 +423,8 @@ test('buildDeck does NOT sync deckmark internals (AGENTS.md, annotations/, .giti
   await w(join(dir, '.gitignore'), 'build/\n');
   await mkdir(join(dir, 'annotations'), { recursive: true });
   await w(join(dir, 'annotations', 'session-stub.json'), '{}');
+  await mkdir(join(dir, '.deckmark', 'artifacts'), { recursive: true });
+  await w(join(dir, '.deckmark', 'artifacts', 'draft-slide.png'), Buffer.alloc(128));
   // A user asset that SHOULD be copied
   await mkdir(join(dir, 'assets'), { recursive: true });
   await w(join(dir, 'assets', 'logo.svg'), '<svg/>');
@@ -314,6 +434,7 @@ test('buildDeck does NOT sync deckmark internals (AGENTS.md, annotations/, .giti
   assert.equal(existsSync(join(dir, 'build', 'deckmark.config.json')), false);
   assert.equal(existsSync(join(dir, 'build', '.gitignore')), false);
   assert.equal(existsSync(join(dir, 'build', 'annotations')), false);
+  assert.equal(existsSync(join(dir, 'build', '.deckmark')), false);
   assert.ok(existsSync(join(dir, 'build', 'assets', 'logo.svg')), 'user asset should be copied');
   await rm(dir, { recursive: true });
 });

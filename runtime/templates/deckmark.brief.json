@@ -1,0 +1,21 @@
+{
+  "schema": "deckmark/brief/v1",
+  "audience": {
+    "description": "",
+    "familiarity": "",
+    "needs": [],
+    "objections": []
+  },
+  "setting": "",
+  "purpose": "",
+  "key_takeaway": "",
+  "desired_action": "",
+  "tone": "",
+  "visual_direction": "",
+  "motion_intent": "",
+  "narrative_arc": "",
+  "quality": {
+    "mode": "advisory",
+    "target": 8
+  }
+}

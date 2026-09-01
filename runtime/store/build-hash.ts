@@ -31,3 +31,7 @@ export async function buildHash(dir: string): Promise<string> {
   }
   return `sha256:${hash.digest('hex')}`;
 }
+
+export function contentHash(content: string): string {
+  return `sha256:${createHash('sha256').update(content, 'utf8').digest('hex')}`;
+}

@@ -1,6 +1,6 @@
 ---
 name: deckmark
-description: Use when the user asks to create, build, or iterate on a slide deck. Tells the agent how to drive the deckmark MCP tools (init_deck, build_deck, start_review, wait_for_close, get_annotations, stop_review, publish_deck) and how to handle in-browser annotations and the three-axis design system.
+description: Use when the user asks to create, build, audit, or iterate on a slide deck. Tells the agent how to drive the deckmark MCP tools, define the audience and message contract, run the beauty/narrative/audience quality gate, and handle in-browser annotations.
 ---
 
 # deckmark
@@ -14,21 +14,22 @@ deckmark is a workflow for building a slide deck *with* the user, where they rev
 - The user said "address the annotations," "apply the comments," or similar after a review round.
 - The user asked to change the design ("make it darker", "switch to academic style") — call `build_deck` again with new design params; no content rewrite needed.
 
-## The seven tools
+## The eight tools
 
 | Tool | When |
 |---|---|
 | `init_deck` | Once at the start of a new deck. |
 | `build_deck` | After writing or editing `content.md`, **or** when the user wants to change the design (style/mode/motion). Idempotent. |
+| `audit_deck` | After a build and before human review. Produces deterministic findings and an independent-critic packet; call it again with the critic response to persist an accept/revise verdict. |
 | `start_review` | After a build, to open the review server. |
 | `wait_for_close` | **Always call this immediately after `start_review`.** Blocks until the user clicks Done in the browser, or until `timeout_seconds` elapses (default 1800 = 30 min). Without it, clicking Done in the browser doesn't reach the agent and the workflow stalls. |
 | `get_annotations` | Whenever the user says to address comments. Works even if Done was not clicked. |
 | `stop_review` | Optional — the server auto-stops 5 min after Done. |
 | `publish_deck` | After the user is satisfied. **Always ask the user `single-file` or `multi-file`** — both shapes are common, neither is "default." See "Publishing" below for what to say. |
 
-## Three-axis design system
+## Design system
 
-`build_deck` accepts three orthogonal design parameters:
+`build_deck` accepts three orthogonal design axes plus a motion character:
 
 ### mode: `light` | `dark`
 
@@ -48,7 +49,27 @@ The visual personality:
 
 ### motion: array of `slide-transitions` | `fragment-reveals` | `auto-animate`
 
-Multi-select. Pass an array (e.g., `['slide-transitions', 'fragment-reveals']`). Pass `[]` for no motion at all.
+Multi-select. Pass an array (e.g., `['slide-transitions', 'fragment-reveals']`). Pass `[]` for no global motion. A per-slide directive can still opt a selected slide into motion; `audit_deck` includes that override in its authoritative motion metadata.
+
+### motion_style: `subtle` | `engaging` | `cinematic`
+
+Controls how enabled motion feels:
+
+| value | Use when |
+|---|---|
+| `subtle` (default) | The material should feel calm, precise, executive, or academic. |
+| `engaging` | Directional staging and progressive disclosure will help the audience follow the argument. |
+| `cinematic` | A small number of high-impact transitions support a launch, vision, or emotional story. |
+
+Motion must earn its place. Use it to direct attention, explain change, stage complexity, or create a deliberate pause. Do not enable every motion flag merely to make the deck feel active.
+
+For a specific high-value slide, add a source directive instead of making the whole deck dramatic:
+
+```html
+<!-- deckmark: transition=slide fragments=engaging auto-animate -->
+```
+
+Supported values are `transition=none|fade|slide|zoom|convex|concave`, `fragments=none|subtle|engaging|cinematic`, and `auto-animate` or `auto-animate=false`. Prefer one or two intentional motion moments over constant novelty.
 
 ### slideNumbers (optional)
 
@@ -73,6 +94,63 @@ If the user describes design in words, map to the three axes:
 - "no animation" / "print-friendly" / "static" → `motion: []`
 - "smooth" / "animated" → `motion: ['slide-transitions']`
 - "build up" / "reveal one at a time" → add `'fragment-reveals'`
+- "engaging" / "dynamic" / "progressive" → `motion_style: engaging`
+- "cinematic" / "dramatic launch" → `motion_style: cinematic`
+
+## The quality contract
+
+`init_deck` creates `deckmark.brief.json`. Fill it before writing the final deck:
+
+- `audience.description` and `audience.familiarity`
+- `setting` and available presentation time
+- `purpose`
+- `key_takeaway`
+- `desired_action`
+- likely audience needs and objections
+- `tone` and `visual_direction`
+- `motion_intent`
+- `narrative_arc`
+- `quality.mode`: `advisory` or `blocking`
+
+Do not treat audience as a demographic label. Describe what they know, what they care about, what they may resist, and what decision or behavior the deck should produce.
+
+## Definition of beautiful
+
+A beautiful deck is:
+
+1. **Intentional** — it commits to a visual direction that fits the audience and message.
+2. **Hierarchical** — every slide makes its point and reading order immediately obvious.
+3. **Composed** — scale, alignment, whitespace, density, and rhythm feel deliberate.
+4. **Specific** — it does not look interchangeable with an unrelated generated deck.
+5. **Coherent** — typography, color, imagery, and layout form one system without making every slide identical.
+6. **Meaningful** — visuals and motion clarify the argument rather than decorate it.
+7. **Polished** — the audience notices the message rather than construction mistakes.
+
+Beauty is judged against the brief, not a universal preferred style. A restrained board deck and an expressive launch deck can both be beautiful.
+
+## Quality-gate workflow
+
+After the first build:
+
+1. Call `audit_deck` without `critique`. Read its deterministic findings, screenshot plan, critic prompt, and response schema.
+2. Fix obvious P1 issues before paying for an independent review.
+3. When browser or screenshot tooling is available, capture every settled slide **after the current build completes**. For fragments or auto-animate, also capture the most important before/after pair. Save artifacts under `.deckmark/artifacts/`; other locations are rejected so review evidence cannot leak into published output.
+4. Dispatch the returned critic prompt **once per quality pass** to a read-only reviewer on a model different from the builder when the host supports it. Prime the reviewer with the supplied deterministic hypotheses; do not merely say "review this deck."
+5. If a different-model reviewer is unavailable, perform a cold self-review and report `reviewer.independent: false`. This is allowed in advisory mode but cannot satisfy blocking mode.
+6. Call `audit_deck` again with `critique`, `artifacts`, the returned `run_id` and `build_hash` as `prepared_build_hash`, and `iteration` (`1` through `3`). Reuse the same `run_id` across revision passes.
+7. On `revise`, fix only blocking findings first, rebuild, and capture a fresh static set for the rebuilt deck plus the affected motion states. Stop when accepted or when `stop.stop` reports `cap`, `plateau`, or `regression`.
+8. Only after the quality pass, start the user's annotation review. Human feedback remains the final authority.
+
+The critic evaluates:
+
+- visual intent, hierarchy, composition, distinctiveness, polish, and content/visual fit
+- whether motion controls attention or explains change
+- slide-to-slide logic, setup, evidence, payoff, and closing action
+- audience comprehension, credibility, objections, likely reaction, recall, and action clarity
+
+In blocking mode, `publish_deck` refuses a missing, rejected, or stale quality report. Any rebuild invalidates the prior accepted report.
+
+Reviewer independence is recorded from the host's reviewer metadata; deckmark cannot independently prove which model the host dispatched. The workflow requires the agent to report this honestly, and blocking mode rejects an explicitly non-independent review.
 
 ### Style influences content, not just visuals
 
@@ -108,9 +186,11 @@ Each session also has:
 ## Workflow
 
 ```
-ask design (mode/style/motion) + content (audience/length)
+ask design + audience/message/outcome
   ↓
-init_deck → write content.md → build_deck(style, mode, motion)
+init_deck → fill deckmark.brief.json → write content.md → build_deck
+  ↓
+audit_deck → independent critic → bounded revise/accept loop
   ↓
 start_review → [user annotates in browser]
   ↓
@@ -190,7 +270,7 @@ If you applied annotations *without* running a new `start_review`, the deck stil
 ## Pitfalls
 
 - Don't ask the user to take screenshots; the annotation system replaces that loop.
-- Don't rewrite content wholesale to "improve" things — only address the annotations and the summary.
+- After human annotation begins, don't rewrite content wholesale under the quality rubric — address the user's annotations and summary unless they request a broader pass.
 - Don't call `build_deck` while the user is mid-annotation — selectors will go stale.
 - Don't keep multiple review sessions open simultaneously; the auto-shutdown handles it but you can call `stop_review` explicitly.
 - Don't change the design unilaterally — it's the user's choice. *Suggest* a different style if you think it'd fit better; don't switch without asking.

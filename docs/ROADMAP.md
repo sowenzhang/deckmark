@@ -30,7 +30,9 @@ Shipped and verified end-to-end on Claude Code:
 
 ## Next up (v1.1, near-term)
 
-Small, observable gaps that won't change the public API.
+Small, observable gaps plus one backward-compatible quality-tool addition.
+
+- **Deck-quality gate**. Add a per-deck audience/message brief, deterministic structure and density checks, a concrete definition of visual quality, purposeful-motion guidance, and a scored independent review of narrative flow and audience reception. Start advisory; allow an explicit blocking mode tied to the current build hash.
 
 - **MCP `serverInfo.version` is hard-coded `0.1.0`**. Read it from
   `package.json` so the advertise version matches the package version.

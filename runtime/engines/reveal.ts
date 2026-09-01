@@ -3,6 +3,7 @@ import type { Dirent } from 'node:fs';
 import { dirname, join, basename, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { marked } from 'marked';
+import { contentHash } from '../store/build-hash.ts';
 
 // Relative (no leading slash) so the emitted HTML works both as served
 // from the local review server AND as a standalone file:// open after
@@ -28,6 +29,7 @@ const EXCLUDED_FROM_ASSET_SYNC = new Set([
   // lets callers override it. 'content.md' stays here as a belt-and-suspenders
   // default for the common case.
   'content.md',
+  'deckmark.brief.json',
   'deckmark.config.json',
   'annotations',
   'build',
@@ -115,6 +117,7 @@ async function syncUserAssetsToBuild(
 export type DeckStyle = 'professional' | 'academic' | 'fashion' | 'technical' | 'fun';
 export type DeckMode = 'light' | 'dark';
 export type DeckMotion = 'slide-transitions' | 'fragment-reveals' | 'auto-animate';
+export type DeckMotionStyle = 'subtle' | 'engaging' | 'cinematic';
 
 export interface BuildOpts {
   contentPath: string;
@@ -122,6 +125,7 @@ export interface BuildOpts {
   style?: DeckStyle;
   mode?: DeckMode;
   motion?: DeckMotion[];
+  motionStyle?: DeckMotionStyle;
   /** Show slide numbers in the corner. Pass true for "current / total", a string for custom reveal.js format. */
   slideNumbers?: boolean | 'c' | 'c/t' | 'h.v' | 'h/v';
 }
@@ -132,6 +136,7 @@ export interface BuildResult {
   style: DeckStyle;
   mode: DeckMode;
   motion: DeckMotion[];
+  motionStyle: DeckMotionStyle;
   slideNumbers: boolean | string;
 }
 
@@ -140,6 +145,14 @@ interface StyleConfig {
   baseTheme: { light: string; dark: string };
   /** preferred reveal.js transition when slide-transitions motion is enabled */
   transition: 'fade' | 'slide' | 'zoom' | 'convex' | 'concave';
+}
+
+type RevealTransition = StyleConfig['transition'] | 'none';
+
+interface SlideMotionDirective {
+  transition?: RevealTransition;
+  fragments?: DeckMotionStyle | 'none';
+  autoAnimate?: boolean;
 }
 
 const STYLES: Record<DeckStyle, StyleConfig> = {
@@ -153,11 +166,93 @@ const STYLES: Record<DeckStyle, StyleConfig> = {
 const DEFAULT_STYLE: DeckStyle = 'professional';
 const DEFAULT_MODE: DeckMode = 'light';
 const DEFAULT_MOTION: DeckMotion[] = ['slide-transitions'];
+const DEFAULT_MOTION_STYLE: DeckMotionStyle = 'subtle';
+
+function transitionFor(style: DeckStyle, motionStyle: DeckMotionStyle): StyleConfig['transition'] {
+  if (motionStyle === 'subtle') return STYLES[style].transition;
+  if (motionStyle === 'engaging') {
+    return style === 'academic' ? 'fade' : 'slide';
+  }
+  return STYLES[style].transition;
+}
+
+function motionCss(): string {
+  const transforms: Record<DeckMotionStyle, string> = {
+    subtle: 'translateY(0.25em)',
+    engaging: 'translateX(-0.55em)',
+    cinematic: 'translateY(0.7em) scale(0.97)'
+  };
+  const durations: Record<DeckMotionStyle, string> = {
+    subtle: '260ms',
+    engaging: '360ms',
+    cinematic: '480ms'
+  };
+  const styleRules = (Object.keys(transforms) as DeckMotionStyle[]).map(style => `
+.reveal .fragment.dm-fragment-${style} {
+  transition-duration: ${durations[style]};
+}
+.reveal .fragment.dm-fragment-${style}:not(.visible) {
+  transform: ${transforms[style]};
+}`).join('\n');
+  return `
+.reveal .fragment.dm-fragment {
+  transition-property: opacity, transform;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal .fragment.dm-fragment:not(.visible) {
+  opacity: 0;
+}
+.reveal .fragment.dm-fragment.visible {
+  opacity: 1;
+  transform: none;
+}
+.reveal.overview .fragment.dm-fragment {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+${styleRules}`;
+}
+
+function parseSlideMotionDirective(block: string): {
+  content: string;
+  directive: SlideMotionDirective;
+} {
+  const match = block.match(/<!--\s*deckmark:\s*([^]*?)-->/i);
+  if (!match) return { content: block, directive: {} };
+
+  const directive: SlideMotionDirective = {};
+  const allowedTransitions = new Set<RevealTransition>([
+    'none', 'fade', 'slide', 'zoom', 'convex', 'concave'
+  ]);
+  const allowedFragmentStyles = new Set<DeckMotionStyle | 'none'>([
+    'none', 'subtle', 'engaging', 'cinematic'
+  ]);
+  for (const token of match[1].trim().split(/\s+/)) {
+    const [key, rawValue] = token.split('=', 2);
+    const value = rawValue?.toLowerCase();
+    if (key === 'transition' && value && allowedTransitions.has(value as RevealTransition)) {
+      directive.transition = value as RevealTransition;
+    } else if (key === 'fragments' && value && allowedFragmentStyles.has(value as DeckMotionStyle | 'none')) {
+      directive.fragments = value as DeckMotionStyle | 'none';
+    } else if (key === 'auto-animate') {
+      directive.autoAnimate = value !== 'false' && value !== 'none';
+    }
+  }
+  return {
+    content: block.replace(match[0], '').trim(),
+    directive
+  };
+}
 
 export async function buildDeck(opts: BuildOpts): Promise<BuildResult> {
   const style: DeckStyle = opts.style && STYLES[opts.style] ? opts.style : DEFAULT_STYLE;
   const mode: DeckMode = opts.mode === 'dark' ? 'dark' : DEFAULT_MODE;
   const motion: DeckMotion[] = Array.isArray(opts.motion) ? opts.motion : DEFAULT_MOTION;
+  const motionStyle: DeckMotionStyle =
+    opts.motionStyle === 'engaging' || opts.motionStyle === 'cinematic'
+      ? opts.motionStyle
+      : DEFAULT_MOTION_STYLE;
 
   const config = STYLES[style];
   const baseTheme = config.baseTheme[mode];
@@ -173,24 +268,54 @@ export async function buildDeck(opts: BuildOpts): Promise<BuildResult> {
     : (slideNumbers === true ? 'c/t' : slideNumbers);
 
   const raw = await readFile(opts.contentPath, 'utf8');
+  const sourceHash = contentHash(raw);
   const blocks = raw.split(/^\s*---\s*$/m).map(s => s.trim()).filter(Boolean);
   if (blocks.length === 0) {
     throw new Error(`No slides in ${opts.contentPath}: file is empty or contains only separators`);
   }
 
+  const slidePlans = blocks.map(parseSlideMotionDirective);
+  const hasPerSlideFragments = slidePlans.some(plan =>
+    plan.directive.fragments !== undefined && plan.directive.fragments !== 'none'
+  );
+  const hasPerSlideAutoAnimate = slidePlans.some(plan => plan.directive.autoAnimate === true);
+  const hasPerSlideTransition = slidePlans.some(plan =>
+    plan.directive.transition !== undefined && plan.directive.transition !== 'none'
+  );
+  const autoAnimateEnabled = autoAnimate || hasPerSlideAutoAnimate;
+  const transitionsEnabled = slideTransitions || hasPerSlideTransition;
+
   const slugCounts = new Map<string, number>();
-  const sections = blocks.map((block, i) => {
+  const sections = slidePlans.map(({ content: block, directive }, i) => {
     let html = marked.parse(block, { async: false }) as string;
-    if (fragmentReveals) {
-      html = applyFragmentReveals(html);
+    const slideFragments = directive.fragments === 'none'
+      ? false
+      : fragmentReveals || directive.fragments !== undefined;
+    if (slideFragments) {
+      html = applyFragmentReveals(
+        html,
+        directive.fragments && directive.fragments !== 'none' ? directive.fragments : motionStyle
+      );
     }
     const titleMatch = block.match(/^#+\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1].trim() : '';
     const baseSlug = title ? title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : '';
     const slug = uniqueSlug(slugCounts, baseSlug || `slide-${i}`);
-    const autoAnimateAttr = autoAnimate ? ' data-auto-animate' : '';
-    return `<section id="${slug}" data-slide-index="${i}" data-slide-title="${escapeAttr(title)}"${autoAnimateAttr}>${html}</section>`;
+    const slideAutoAnimate = directive.autoAnimate ?? autoAnimate;
+    const autoAnimateAttr = slideAutoAnimate ? ' data-auto-animate' : '';
+    const transitionAttr = directive.transition
+      ? ` data-transition="${directive.transition}"`
+      : '';
+    return `<section id="${slug}" data-slide-index="${i}" data-slide-title="${escapeAttr(title)}"${autoAnimateAttr}${transitionAttr}>${html}</section>`;
   });
+  const fragmentsEnabled = sections.some(section =>
+    /<li\b[^>]*class="[^"]*\bfragment\b[^"]*"/.test(section)
+  );
+  const effectiveMotion: DeckMotion[] = [
+    ...(transitionsEnabled ? ['slide-transitions' as const] : []),
+    ...(fragmentsEnabled ? ['fragment-reveals' as const] : []),
+    ...(autoAnimateEnabled ? ['auto-animate' as const] : [])
+  ];
 
   let deckmarkTheme = '';
   try {
@@ -199,10 +324,11 @@ export async function buildDeck(opts: BuildOpts): Promise<BuildResult> {
     // theme file missing — engine still produces a valid (unstyled) deck
   }
 
-  const transition = slideTransitions ? config.transition : 'none';
+  const transition = slideTransitions ? transitionFor(style, motionStyle) : 'none';
+  const autoAnimateDuration = motionStyle === 'cinematic' ? 0.9 : motionStyle === 'engaging' ? 0.65 : 0.45;
 
   const htmlDocument = `<!doctype html>
-<html lang="en" data-mode="${mode}">
+<html lang="en" data-mode="${mode}" data-motion-style="${motionStyle}" data-deckmark-motion="${effectiveMotion.join(',')}" data-deckmark-content-hash="${sourceHash}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -211,6 +337,7 @@ export async function buildDeck(opts: BuildOpts): Promise<BuildResult> {
   <link rel="stylesheet" href="${REVEAL_PREFIX}/theme/${baseTheme}.css" id="theme">
   <style data-deckmark-style="${style}" data-deckmark-mode="${mode}">
 ${deckmarkTheme}
+${motionCss()}
   </style>
 </head>
 <body>
@@ -231,8 +358,9 @@ ${sections.join('\n')}
       width: '100%',
       height: '100%',
       margin: 0,
-      autoAnimate: ${autoAnimate},
-      fragments: ${fragmentReveals},
+      autoAnimate: ${autoAnimateEnabled},
+      autoAnimateDuration: ${autoAnimateDuration},
+      fragments: ${fragmentsEnabled},
       slideNumber: ${JSON.stringify(slideNumberValue)}
     });
   </script>
@@ -299,19 +427,22 @@ ${sections.join('\n')}
     basename(opts.contentPath)
   );
   await writeFile(join(opts.outDir, 'index.html'), htmlDocument, 'utf8');
-  return { outDir: opts.outDir, slideCount: sections.length, style, mode, motion, slideNumbers: slideNumberValue };
+  return { outDir: opts.outDir, slideCount: sections.length, style, mode, motion, motionStyle, slideNumbers: slideNumberValue };
 }
 
 /** Mark list items as reveal.js fragments so they appear one at a time. */
-function applyFragmentReveals(html: string): string {
+function applyFragmentReveals(html: string, motionStyle: DeckMotionStyle): string {
   // Only apply to direct <li> elements; preserve any existing classes.
   return html.replace(/<li(\s[^>]*)?>/g, (match, attrs) => {
     const attr = attrs ?? '';
     if (/class\s*=/.test(attr)) {
       // append "fragment" to existing class list
-      return match.replace(/class\s*=\s*"([^"]*)"/, (_m, cls) => `class="${cls} fragment"`);
+      return match.replace(
+        /class\s*=\s*"([^"]*)"/,
+        (_m, cls) => `class="${cls} fragment dm-fragment dm-fragment-${motionStyle}"`
+      );
     }
-    return `<li${attr} class="fragment">`;
+    return `<li${attr} class="fragment dm-fragment dm-fragment-${motionStyle}">`;
   });
 }
 

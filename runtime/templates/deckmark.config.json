@@ -1,5 +1,4 @@
 {
   "engine": "reveal",
-  "theme": "white",
-  "captureScreenshots": false
+  "theme": "white"
 }

@@ -16,17 +16,18 @@ Copilot, Cursor) because the surface is the MCP tool list, not a CLI.
 
 | Path | Role |
 |---|---|
-| `mcp/server.ts` | MCP stdio server entry. Exposes the seven tools. |
+| `mcp/server.ts` | MCP stdio server entry. Exposes the eight tools. |
 | `mcp/tools/` | One file per tool: `init`, `build`, `review`, `annotations`, `publish`. |
 | `runtime/engines/reveal.ts` | Markdown → reveal.js HTML. Owns `build_deck`, user-asset sync, the `.deckmark-build` marker. |
 | `runtime/server/` | Fastify review server: static file routes, overlay injection, session API. |
 | `runtime/overlay/` | Browser-side overlay (TS, bundled by esbuild to `dist/overlay/overlay.js`). |
 | `runtime/publish/inline-html.ts` | Single-file publish: inlines reveal CSS/JS + base64 images. |
 | `runtime/publish/multi-file.ts` | Multi-file publish: copies buildDir + overlays reveal dist. |
-| `runtime/store/` | Annotation session JSON store. |
+| `runtime/store/` | Annotation session JSON store and build hashing. |
+| `runtime/quality/` | Deck brief, deterministic analysis, beauty/audience rubric, and persisted quality verdicts. |
 | `skills/deckmark/SKILL.md` | Agent-facing prompt explaining the workflow. |
 | `commands/` | Claude-Code slash commands (e.g. `/deckmark:use-deckmark`). |
-| `test/unit/`, `test/integration/` | `node:test`-based suites. Currently 44 tests. |
+| `test/unit/`, `test/integration/` | `node:test`-based suites. |
 
 reveal.js is **vendored at runtime via `require.resolve('reveal.js/dist/reveal.js')`**, not hard-coded. This is load-bearing: when deckmark is installed via npx, reveal.js gets hoisted to a parent `node_modules/`, so any hard-coded path would break.
 
@@ -85,7 +86,7 @@ agent is hosting the MCP server.
 - A new release → `docs/troubleshooting.md` § "Release-time issues".
 - A reported bug → `docs/troubleshooting.md` matches symptoms to fixes.
 - Long-term direction → `docs/ROADMAP.md`.
-- Agent workflow when running the seven tools → `skills/deckmark/SKILL.md`.
+- Agent workflow when running the eight tools → `skills/deckmark/SKILL.md`.
 
 ## What NOT to do
 
