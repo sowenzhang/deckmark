@@ -17,7 +17,18 @@ You install deckmark once into your agent. Then you type `/deckmark:use-deckmark
 
 Quit and reopen Claude Code so the MCP server spawns. Verify with `/mcp` — deckmark should show as **connected**. Then `/deckmark:use-deckmark <topic>` is available.
 
-### Other MCP-aware agents (Gemini CLI, Codex, GitHub Copilot CLI, Cursor, …)
+### GitHub Copilot CLI
+
+deckmark's marketplace is also compatible with GitHub Copilot CLI:
+
+```shell
+copilot plugin marketplace add sowenzhang/deckmark
+copilot plugin install deckmark@deckmark-marketplace
+```
+
+Start a new Copilot CLI session, then run `copilot plugin list` and `copilot skill list` to confirm that the `deckmark` plugin and skill are enabled. Ask Copilot to build a presentation in natural language; the skill guides it through the full build, quality, review, annotation, and publish workflow.
+
+### Other MCP-aware agents (Gemini CLI, Codex, Cursor, …)
 
 deckmark ships an MCP server bundled in a GitHub Release tarball, fetched on demand via `npx`. Add the following to your agent's MCP config (typical paths: `~/.gemini/settings.json`, `~/.codex/config.toml`, `~/.cursor/mcp.json`, etc. — consult your agent's docs for the right file):
 
@@ -37,7 +48,7 @@ deckmark ships an MCP server bundled in a GitHub Release tarball, fetched on dem
 }
 ```
 
-Restart the agent. The eight deckmark MCP tools become callable. (Note: the slash command `/deckmark:use-deckmark` and the design-system skill are Claude Code–specific packaging conventions and won't appear in other agents. The tools themselves work everywhere — just describe your intent in natural language and the agent will call them.)
+Restart the agent. The eight deckmark MCP tools become callable. (Note: the slash command `/deckmark:use-deckmark` is a Claude Code packaging convention and won't appear in other agents. Copilot CLI installs the deckmark skill through the marketplace; agents configured only through MCP receive the tools, so describe your intent in natural language.)
 
 ### Updating to a new release
 
@@ -50,7 +61,14 @@ When a new version ships:
 
 Restart Claude. The npx invocation always fetches the `latest` release tarball, so a Claude restart is usually enough on its own.
 
-For non-Claude agents, no update step is needed — `latest/download/deckmark.tgz` is a redirect that always points at the newest release. Restart the agent and `npx` will pick up the new tarball automatically.
+For GitHub Copilot CLI:
+
+```shell
+copilot plugin marketplace update deckmark-marketplace
+copilot plugin update deckmark
+```
+
+For agents configured directly through MCP, no update step is needed — `latest/download/deckmark.tgz` is a redirect that always points at the newest release. Restart the agent and `npx` will pick up the new tarball automatically.
 
 ---
 
@@ -160,7 +178,7 @@ Single Node 22+ package, TypeScript ESM. Three layers:
 
 - `runtime/` — engine (reveal.js adapter), Fastify review server with overlay script injection, atomic session store, sha256 build hash, browser overlay (vanilla TS bundled via esbuild), publish emitters (inline + multi-file), and project templates.
 - `mcp/` — stdio MCP server that exposes the eight tools by calling into the runtime modules.
-- `commands/`, `skills/`, `.claude-plugin/`, `.mcp.json` — the Claude plugin packaging surface.
+- `commands/`, `skills/`, `.claude-plugin/`, `.mcp.json` — the Claude Code and GitHub Copilot CLI plugin packaging surface.
 
 The overlay knows nothing about reveal.js. It walks the rendered DOM and generates stable CSS selectors, so engine adapters for Slidev / Impress / Marp can be added later without changing a line of overlay code. reveal.js is vendored via npm (`node_modules/reveal.js/dist/`) — no CDN dependency, works offline.
 

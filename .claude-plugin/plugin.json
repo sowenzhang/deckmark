@@ -1,7 +1,7 @@
 {
   "name": "deckmark",
   "description": "In-browser annotation for AI-generated presentations. Build a deck with your agent, click directly on elements to leave change requests, and the agent applies them — no screenshots, no back-and-forth.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "author": {
     "name": "sowenzhang",
     "url": "https://github.com/sowenzhang"
@@ -9,6 +9,8 @@
   "homepage": "https://github.com/sowenzhang/deckmark",
   "repository": "https://github.com/sowenzhang/deckmark",
   "license": "MIT",
+  "skills": "skills/",
+  "mcpServers": ".mcp.json",
   "keywords": [
     "presentation",
     "slides",
