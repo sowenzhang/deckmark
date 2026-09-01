@@ -45,8 +45,13 @@ async function normalizeArtifacts(
   } catch {
     throw new Error('artifact directory does not exist; save screenshots under .deckmark/artifacts/');
   }
+  const deckRoot = await realpath(deckDir);
+  if (!isUnder(deckRoot, root)) {
+    throw new Error('artifact directory must stay inside the deck directory');
+  }
   const buildStat = await stat(buildIndexPath);
   const artifacts: ScreenshotArtifact[] = [];
+  const seenPaths = new Set<string>();
   for (const artifact of input) {
     if (!artifact || typeof artifact.path !== 'string' || !artifact.path.trim()) {
       throw new Error('each artifact requires a path');
@@ -63,6 +68,10 @@ async function normalizeArtifacts(
     if (!isUnder(root, canonical)) {
       throw new Error(`artifact path must stay inside .deckmark/artifacts/: ${artifact.path}`);
     }
+    if (seenPaths.has(canonical)) {
+      throw new Error(`artifact path may only be used once: ${artifact.path}`);
+    }
+    seenPaths.add(canonical);
     const extension = extname(path).toLowerCase();
     if (extension !== '.png') {
       throw new Error(`artifact must be a PNG screenshot: ${artifact.path}`);
@@ -83,9 +92,12 @@ async function normalizeArtifacts(
     if (decoded.width < 1 || decoded.height < 1) {
       throw new Error(`artifact has invalid dimensions: ${artifact.path}`);
     }
+    const { viewport: _claimedViewport, ...verifiedArtifact } = artifact;
     artifacts.push({
-      ...artifact,
+      ...verifiedArtifact,
       sha256: dataHash(bytes),
+      pixel_width: decoded.width,
+      pixel_height: decoded.height,
       path: `.deckmark/artifacts/${relative(root, canonical).replace(/\\/g, '/')}`
     });
   }

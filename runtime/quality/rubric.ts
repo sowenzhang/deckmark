@@ -1,5 +1,6 @@
 import {
   QUALITY_DIMENSIONS,
+  QUALITY_FINDING_CATEGORIES,
   type CriticSubmission,
   type QualityDimension,
   type QualityFinding,
@@ -45,19 +46,13 @@ function priority(value: unknown): QualityPriority {
 }
 
 function category(value: unknown): CriticSubmission['findings'][number]['category'] {
-  switch (value) {
-    case 'brief':
-    case 'structure':
-    case 'density':
-    case 'variety':
-    case 'motion':
-    case 'narrative':
-    case 'audience':
-    case 'visual':
-      return value;
-    default:
-      throw new Error('critic finding category is invalid');
+  if (
+    typeof value === 'string' &&
+    (QUALITY_FINDING_CATEGORIES as readonly string[]).includes(value)
+  ) {
+    return value as CriticSubmission['findings'][number]['category'];
   }
+  throw new Error('critic finding category is invalid');
 }
 
 function score(value: unknown, dimension: string): number {
@@ -220,7 +215,8 @@ export function criticPrompt(opts: {
   const artifactLines = opts.artifacts.length
     ? opts.artifacts.map(artifact =>
         `- ${artifact.path}${artifact.slide_index === undefined ? '' : ` (slide ${artifact.slide_index + 1})`}` +
-        `${artifact.state ? ` [${artifact.state}]` : ''}${artifact.viewport ? ` @ ${artifact.viewport}` : ''}`
+        `${artifact.state ? ` [${artifact.state}]` : ''}` +
+        `${artifact.pixel_width && artifact.pixel_height ? ` @ ${artifact.pixel_width}x${artifact.pixel_height}px` : ''}`
       ).join('\n')
     : '- No screenshots were supplied. Judge visual dimensions conservatively and state the evidence limitation.';
 
@@ -283,10 +279,10 @@ export const CRITIC_RESPONSE_SCHEMA = {
         required: ['priority', 'category', 'message', 'suggested_fix', 'prompted'],
         properties: {
           priority: { type: 'string', enum: ['P1', 'P2', 'P3'] },
-          category: { type: 'string' },
+          category: { type: 'string', enum: [...QUALITY_FINDING_CATEGORIES] },
           message: { type: 'string' },
           suggested_fix: { type: 'string' },
-          slide_index: { type: 'number' },
+          slide_index: { type: 'integer', minimum: 0 },
           prompted: { type: 'boolean' },
           confidence: { type: 'number', minimum: 0, maximum: 10 }
         }

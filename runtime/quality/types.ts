@@ -1,5 +1,16 @@
 export type QualityMode = 'advisory' | 'blocking';
 export type QualityPriority = 'P1' | 'P2' | 'P3';
+export const QUALITY_FINDING_CATEGORIES = [
+  'brief',
+  'structure',
+  'density',
+  'variety',
+  'motion',
+  'narrative',
+  'audience',
+  'visual'
+] as const;
+export type QualityFindingCategory = typeof QUALITY_FINDING_CATEGORIES[number];
 
 export interface DeckBrief {
   schema?: 'deckmark/brief/v1';
@@ -25,7 +36,7 @@ export interface DeckBrief {
 
 export interface QualityFinding {
   priority: QualityPriority;
-  category: 'brief' | 'structure' | 'density' | 'variety' | 'motion' | 'narrative' | 'audience' | 'visual';
+  category: QualityFindingCategory;
   message: string;
   suggested_fix: string;
   slide_index?: number;
@@ -79,6 +90,8 @@ export interface ScreenshotArtifact {
   slide_index?: number;
   state?: 'static' | 'fragment-before' | 'fragment-after' | 'auto-animate-before' | 'auto-animate-after';
   viewport?: string;
+  pixel_width?: number;
+  pixel_height?: number;
   note?: string;
 }
 

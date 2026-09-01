@@ -66,7 +66,13 @@ function validateQualityReport(value: unknown): QualityReport {
     (report.reviewer.method !== 'different-model' && report.reviewer.method !== 'cold-self-review') ||
     typeof report.reviewer.independent !== 'boolean' ||
     !Array.isArray(report.artifacts) ||
-    report.artifacts.some(artifact => typeof artifact.sha256 !== 'string') ||
+    report.artifacts.some(artifact =>
+      typeof artifact.sha256 !== 'string' ||
+      !Number.isInteger(artifact.pixel_width) ||
+      !Number.isInteger(artifact.pixel_height) ||
+      (artifact.pixel_width ?? 0) < 1 ||
+      (artifact.pixel_height ?? 0) < 1
+    ) ||
     !Array.isArray(report.floor_failures) ||
     !Array.isArray(report.deterministic_findings) ||
     !Array.isArray(report.critic_findings) ||

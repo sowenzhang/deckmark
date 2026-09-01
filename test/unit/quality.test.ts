@@ -8,6 +8,7 @@ import { buildDeck } from '../../runtime/engines/reveal.ts';
 import { analyzeDeckContent, inspectBuildDesign } from '../../runtime/quality/analyze.ts';
 import {
   BEAUTY_DEFINITION,
+  CRITIC_RESPONSE_SCHEMA,
   RUBRIC,
   scoreCritique,
   validateCriticSubmission
@@ -15,7 +16,11 @@ import {
 import { auditDeckTool } from '../../mcp/tools/audit.ts';
 import { publishDeckTool } from '../../mcp/tools/publish.ts';
 import { readDeckBrief } from '../../runtime/quality/brief.ts';
-import type { CriticSubmission, DeckBrief } from '../../runtime/quality/types.ts';
+import {
+  QUALITY_FINDING_CATEGORIES,
+  type CriticSubmission,
+  type DeckBrief
+} from '../../runtime/quality/types.ts';
 
 function fakePng(fill = 0): Buffer {
   const png = new PNG({ width: 16, height: 16 });
@@ -270,6 +275,13 @@ test('critic validation rejects malformed priorities and missing findings', () =
   );
 });
 
+test('critic response schema matches runtime category and slide-index validation', () => {
+  const properties = CRITIC_RESPONSE_SCHEMA.properties.findings.items.properties;
+  assert.deepEqual(properties.category.enum, [...QUALITY_FINDING_CATEGORIES]);
+  assert.equal(properties.slide_index.type, 'integer');
+  assert.equal(properties.slide_index.minimum, 0);
+});
+
 test('brief validation rejects invalid shapes and quality modes', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'deckmark-brief-validation-'));
   await writeFile(join(dir, 'deckmark.brief.json'), 'null');
@@ -352,6 +364,17 @@ test('blocking quality mode requires screenshot evidence and an accepted current
   assert.ok(
     (accepted.artifacts as Array<{ path: string }>).every(artifact =>
       artifact.path.startsWith('.deckmark/artifacts/')
+    )
+  );
+  assert.ok(
+    (accepted.artifacts as Array<{
+      viewport?: string;
+      pixel_width: number;
+      pixel_height: number;
+    }>).every(artifact =>
+      artifact.viewport === undefined &&
+      artifact.pixel_width === 16 &&
+      artifact.pixel_height === 16
     )
   );
   assert.doesNotMatch(JSON.stringify(accepted.artifacts), /[A-Z]:\\|\/Users\//);
@@ -615,6 +638,59 @@ test('artifact paths outside .deckmark/artifacts are rejected before inspection'
     /must stay inside \.deckmark\/artifacts/i
   );
   await rm(outside, { force: true });
+  await rm(dir, { recursive: true });
+});
+
+test('artifact root cannot be a symlink or junction outside the deck', async () => {
+  const { symlink } = await import('node:fs/promises');
+  const dir = await setupDeck();
+  const external = await mkdtemp(join(tmpdir(), 'deckmark-external-artifacts-'));
+  await mkdir(join(dir, '.deckmark'), { recursive: true });
+  await writeFile(join(external, 'outside.png'), fakePng());
+  try {
+    await symlink(
+      external,
+      join(dir, '.deckmark', 'artifacts'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    );
+  } catch (err: unknown) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code === 'EPERM' || e.code === 'ENOSYS') {
+      await rm(dir, { recursive: true, force: true });
+      await rm(external, { recursive: true, force: true });
+      return;
+    }
+    throw err;
+  }
+  await assert.rejects(
+    () => auditDeckTool.handler({
+      dir,
+      artifacts: [{
+        path: '.deckmark/artifacts/outside.png',
+        state: 'static',
+        slide_index: 0
+      }]
+    }),
+    /artifact directory must stay inside the deck directory/i
+  );
+  await rm(dir, { recursive: true, force: true });
+  await rm(external, { recursive: true, force: true });
+});
+
+test('one screenshot cannot satisfy multiple evidence slots', async () => {
+  const dir = await setupDeck();
+  await mkdir(join(dir, '.deckmark', 'artifacts'), { recursive: true });
+  await writeFile(join(dir, '.deckmark', 'artifacts', 'reused.png'), fakePng());
+  await assert.rejects(
+    () => auditDeckTool.handler({
+      dir,
+      artifacts: [
+        { path: '.deckmark/artifacts/reused.png', state: 'static', slide_index: 0 },
+        { path: '.deckmark/artifacts/reused.png', state: 'fragment-before', slide_index: 2 }
+      ]
+    }),
+    /artifact path may only be used once/i
+  );
   await rm(dir, { recursive: true });
 });
 
